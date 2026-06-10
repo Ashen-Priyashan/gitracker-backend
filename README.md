@@ -1,2 +1,19 @@
-# gitracker-backend
-Backend service for **Gitracker**, a GitHub profile analytics platform that fetches and analyzes GitHub user data to provide insights like repository statistics, language breakdowns, and developer activity metrics. Built using GitHub APIs with Redis caching and PostgreSQL for efficient data storage and performance.
+# GitTracker Backend
+
+Backend service for GitTracker — GitHub Profile Analytics System.
+
+## Tech Stack
+- Spring Boot
+- PostgreSQL
+- Redis
+- GitHub REST API
+
+## Features (Planned)
+- GitHub user data fetching
+- Repository analytics
+- Language breakdown
+- Caching with Redis
+- Score engine
+
+## Architecture
+Frontend → Backend → GitHub API → Cache/DB

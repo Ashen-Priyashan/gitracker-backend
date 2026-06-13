@@ -1,7 +1,7 @@
 package com.gitracker.dto;
 
 public record GitHubUserResponse(
-        String login,
+        String username,
         String name,
         String bio,
         String location,

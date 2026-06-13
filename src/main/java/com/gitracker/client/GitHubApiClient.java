@@ -1,5 +1,6 @@
 package com.gitracker.client;
 
+import com.gitracker.dto.GitHubUserDto;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -14,10 +15,10 @@ public class GitHubApiClient {
                 .build();
     }
 
-    public String getUser(String username) {
+    public GitHubUserDto getUser(String username) {
         return restClient.get()
                 .uri("/users/{username}", username)
                 .retrieve()
-                .body(String.class);
+                .body(GitHubUserDto.class);
     }
 }

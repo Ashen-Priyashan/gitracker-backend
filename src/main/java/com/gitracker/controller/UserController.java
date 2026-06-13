@@ -1,5 +1,6 @@
 package com.gitracker.controller;
 
+import com.gitracker.dto.GitHubUserResponse;
 import com.gitracker.service.GitHubUserService;
 import org.springframework.web.bind.annotation.*;
 
@@ -14,7 +15,9 @@ public class UserController {
     }
 
     @GetMapping("/{username}")
-    public String getUser(@PathVariable String username) {
+    public GitHubUserResponse getUser(
+            @PathVariable String username
+    ) {
         return gitHubUserService.getUser(username);
     }
 }

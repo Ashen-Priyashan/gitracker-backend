@@ -1,0 +1,9 @@
+services:
+
+  redis:
+    image: redis:8-alpine
+    container_name: gitracker-redis
+    ports:
+      - "6379:6379"
+
+    restart: unless-stopped

@@ -3,6 +3,8 @@ package com.gitracker.entity;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.LocalDateTime;
+
 @Entity
 @Table(name = "repositories")
 @Getter
@@ -34,4 +36,19 @@ public class Repository {
     @ManyToOne
     @JoinColumn(name = "github_user_id")
     private GitHubUser owner;
+
+    private LocalDateTime createdAt;
+
+    private LocalDateTime updatedAt;
+
+    @PrePersist
+    public void prePersist() {
+        createdAt = LocalDateTime.now();
+        updatedAt = LocalDateTime.now();
+    }
+
+    @PreUpdate
+    public void preUpdate() {
+        updatedAt = LocalDateTime.now();
+    }
 }

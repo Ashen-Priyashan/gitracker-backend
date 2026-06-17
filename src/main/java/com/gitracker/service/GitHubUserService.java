@@ -4,6 +4,7 @@ import com.gitracker.client.GitHubApiClient;
 import com.gitracker.dto.GitHubUserDto;
 import com.gitracker.dto.GitHubUserResponse;
 import org.springframework.stereotype.Service;
+import org.springframework.cache.annotation.Cacheable;
 
 @Service
 public class GitHubUserService {
@@ -14,6 +15,7 @@ public class GitHubUserService {
         this.gitHubApiClient = gitHubApiClient;
     }
 
+    @Cacheable(value = "users", key = "#username")
     public GitHubUserResponse getUser(String username) {
 
         GitHubUserDto user = gitHubApiClient.getUser(username);

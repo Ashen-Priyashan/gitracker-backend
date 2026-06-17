@@ -1,5 +1,7 @@
 package com.gitracker.dto;
 
+import java.io.Serializable;
+
 public record GitHubUserResponse(
         String username,
         String name,
@@ -9,5 +11,5 @@ public record GitHubUserResponse(
         int following,
         String avatarUrl,
         String createdAt
-) {
+) implements Serializable {
 }

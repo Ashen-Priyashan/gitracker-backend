@@ -4,6 +4,8 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 public record GitHubUserDto(
 
+        Long id,
+
         String login,
         String name,
         String bio,
@@ -11,6 +13,9 @@ public record GitHubUserDto(
 
         int followers,
         int following,
+
+        @JsonProperty("public_repos")
+        int publicRepos,
 
         @JsonProperty("avatar_url")
         String avatarUrl,

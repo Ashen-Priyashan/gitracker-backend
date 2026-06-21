@@ -4,6 +4,8 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 public record GitHubRepositoryDto(
 
+        Long id,
+
         String name,
         String description,
 

@@ -22,7 +22,7 @@ public class GitHubUserService {
         this.gitHubUserRepository = gitHubUserRepository;
     }
 
-    @Cacheable(value = "users", key = "#username")
+   // @Cacheable(value = "users", key = "#username")
     public GitHubUserResponse getUser(String username) {
 
         var existingUser =

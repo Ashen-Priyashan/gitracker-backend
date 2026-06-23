@@ -65,15 +65,20 @@ public class UserAnalyticsService {
                 .map(Map.Entry::getKey)
                 .orElse("Unknown");
 
-        UserAnalytics analytics = UserAnalytics.builder()
-                .totalRepositories(totalRepositories)
-                .totalStars(totalStars)
-                .totalForks(totalForks)
-                .mostUsedLanguage(mostUsedLanguage)
-                .calculatedAt(LocalDateTime.now())
-                .githubUser(user)
-                .build();
+        UserAnalytics analytics = userAnalyticsRepository
+        .findByGithubUser(user)
+        .orElse(
+                UserAnalytics.builder()
+                        .githubUser(user)
+                        .build()
+        );
 
-        return userAnalyticsRepository.save(analytics);
+analytics.setTotalRepositories(totalRepositories);
+analytics.setTotalStars(totalStars);
+analytics.setTotalForks(totalForks);
+analytics.setMostUsedLanguage(mostUsedLanguage);
+analytics.setCalculatedAt(LocalDateTime.now());
+
+return userAnalyticsRepository.save(analytics);
     }
 }

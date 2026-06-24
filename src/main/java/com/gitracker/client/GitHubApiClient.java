@@ -7,17 +7,23 @@ import com.gitracker.exception.ResourceNotFoundException;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
+import org.springframework.beans.factory.annotation.Value;
 
 @Component
 public class GitHubApiClient {
 
     private final RestClient restClient;
 
-    public GitHubApiClient() {
-        this.restClient = RestClient.builder()
-                .baseUrl("https://api.github.com")
-                .build();
-    }
+    
+
+public GitHubApiClient(
+        @Value("${github.api.base-url}")
+        String baseUrl
+) {
+    this.restClient = RestClient.builder()
+            .baseUrl(baseUrl)
+            .build();
+}
 
     public GitHubUserDto getUser(String username) {
 

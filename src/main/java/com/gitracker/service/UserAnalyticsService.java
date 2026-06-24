@@ -3,6 +3,7 @@ package com.gitracker.service;
 import com.gitracker.entity.GitHubUser;
 import com.gitracker.entity.Repository;
 import com.gitracker.entity.UserAnalytics;
+import com.gitracker.exception.ResourceNotFoundException;
 import com.gitracker.repository.GitHubUserRepository;
 import com.gitracker.repository.RepositoryRepository;
 import com.gitracker.repository.UserAnalyticsRepository;
@@ -34,7 +35,11 @@ public class UserAnalyticsService {
 
         GitHubUser user = gitHubUserRepository
                 .findByUsername(username)
-                .orElseThrow();
+                .orElseThrow(() ->
+        new ResourceNotFoundException(
+                "GitHub user not found"
+        )
+);
 
         List<Repository> repositories =
                 repositoryRepository.findAll()

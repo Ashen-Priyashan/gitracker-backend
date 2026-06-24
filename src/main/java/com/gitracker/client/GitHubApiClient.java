@@ -3,6 +3,7 @@ package com.gitracker.client;
 import com.gitracker.dto.GitHubRepositoryDto;
 import com.gitracker.dto.GitHubUserDto;
 import com.gitracker.exception.RateLimitExceededException;
+import com.gitracker.exception.ResourceNotFoundException;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
@@ -26,6 +27,12 @@ public class GitHubApiClient {
                     .retrieve()
                     .body(GitHubUserDto.class);
 
+        } catch (HttpClientErrorException.NotFound exception) {
+
+            throw new ResourceNotFoundException(
+                    "GitHub user '" + username + "' not found"
+            );
+
         } catch (HttpClientErrorException.Forbidden exception) {
 
             throw new RateLimitExceededException(
@@ -41,6 +48,12 @@ public class GitHubApiClient {
                     .uri("/users/{username}/repos", username)
                     .retrieve()
                     .body(GitHubRepositoryDto[].class);
+
+        } catch (HttpClientErrorException.NotFound exception) {
+
+            throw new ResourceNotFoundException(
+                    "GitHub user '" + username + "' not found"
+            );
 
         } catch (HttpClientErrorException.Forbidden exception) {
 

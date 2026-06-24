@@ -4,6 +4,8 @@ import com.gitracker.dto.GitHubRepositoryDto;
 import com.gitracker.dto.GitHubUserDto;
 import com.gitracker.exception.RateLimitExceededException;
 import com.gitracker.exception.ResourceNotFoundException;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
@@ -13,10 +15,24 @@ public class GitHubApiClient {
 
     private final RestClient restClient;
 
-    public GitHubApiClient() {
-        this.restClient = RestClient.builder()
-                .baseUrl("https://api.github.com")
-                .build();
+    public GitHubApiClient(
+            @Value("${github.api.base-url}")
+            String baseUrl,
+            @Value("${github.api.token:}")
+            String token
+    ) {
+
+        RestClient.Builder builder = RestClient.builder()
+                .baseUrl(baseUrl);
+
+        if (!token.isBlank()) {
+            builder.defaultHeader(
+                    HttpHeaders.AUTHORIZATION,
+                    "Bearer " + token
+            );
+        }
+
+        this.restClient = builder.build();
     }
 
     public GitHubUserDto getUser(String username) {

@@ -36,7 +36,7 @@ public GitHubRepositoryService(
 
         GitHubRepositoryDto[] repositories =
                 gitHubApiClient.getRepositories(username);
-                GitHubUser owner = gitHubUserRepository
+        GitHubUser owner = gitHubUserRepository
                       .findByUsername(username)
                       .orElse(null);
 

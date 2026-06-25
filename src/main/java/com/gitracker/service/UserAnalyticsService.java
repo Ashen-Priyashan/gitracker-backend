@@ -42,11 +42,7 @@ public class UserAnalyticsService {
 );
 
         List<Repository> repositories =
-                repositoryRepository.findAll()
-                        .stream()
-                        .filter(repo ->
-                                repo.getOwner().getId().equals(user.getId()))
-                        .toList();
+        repositoryRepository.findByOwner(user);
 
         int totalRepositories = repositories.size();
 

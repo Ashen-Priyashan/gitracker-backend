@@ -7,6 +7,8 @@ import org.springframework.stereotype.Service;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
+import java.util.Set;
 
 import com.gitracker.entity.GitHubUser;
 import com.gitracker.entity.Repository;
@@ -39,12 +41,18 @@ public GitHubRepositoryService(
         GitHubUser owner = gitHubUserRepository
                       .findByUsername(username)
                       .orElse(null);
+         Set<Long> existingRepoIds = owner == null
+                ? Set.of()
+                : repositoryRepository.findByOwner(owner)
+                        .stream()
+                        .map(Repository::getRepoId)
+                        .collect(Collectors.toSet());             
 
         return Arrays.stream(repositories)
         .map(repo -> {
 
             if (owner != null &&
-                    repositoryRepository.findByRepoId(repo.id()).isEmpty()) {
+                    !existingRepoIds.contains(repo.id())) {
 
                 Repository repository = Repository.builder()
                         .repoId(repo.id())

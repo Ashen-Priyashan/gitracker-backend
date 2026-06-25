@@ -36,17 +36,13 @@ public class UserAnalyticsService {
         GitHubUser user = gitHubUserRepository
                 .findByUsername(username)
                 .orElseThrow(() ->
-        new ResourceNotFoundException(
-                "GitHub user not found"
-        )
-);
+                       new ResourceNotFoundException(
+                      "GitHub user not found"
+                       )
+         );
 
         List<Repository> repositories =
-                repositoryRepository.findAll()
-                        .stream()
-                        .filter(repo ->
-                                repo.getOwner().getId().equals(user.getId()))
-                        .toList();
+               repositoryRepository.findByOwner(user);
 
         int totalRepositories = repositories.size();
 
@@ -71,11 +67,11 @@ public class UserAnalyticsService {
                 .orElse("Unknown");
 
         UserAnalytics analytics = userAnalyticsRepository
-        .findByGithubUser(user)
-        .orElse(
-                UserAnalytics.builder()
-                        .githubUser(user)
-                        .build()
+                .findByGithubUser(user)
+                .orElse(
+                        UserAnalytics.builder()
+                                .githubUser(user)
+                                .build()
         );
 
 analytics.setTotalRepositories(totalRepositories);

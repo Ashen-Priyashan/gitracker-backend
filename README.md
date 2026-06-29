@@ -1,3 +1,5 @@
+[![Backend CI](https://github.com/Ashen-Priyashan/gitracker-backend/actions/workflows/backend-ci.yml/badge.svg)](https://github.com/Ashen-Priyashan/gitracker-backend/actions/workflows/backend-ci.yml)
+
 # GitTracker Backend
 
 Backend service for GitTracker — GitHub Profile Analytics System.

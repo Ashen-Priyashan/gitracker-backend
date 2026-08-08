@@ -1,6 +1,7 @@
 package com.gitracker.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import java.util.List;
 
 public record GitHubRepositoryDto(
 
@@ -19,6 +20,23 @@ public record GitHubRepositoryDto(
         int watchers,
 
         String language,
+
+        @JsonProperty("default_branch")
+        String defaultBranch,
+
+        @JsonProperty("open_issues_count")
+        int openIssues,
+
+        GitHubLicenseDto license,
+
+        List<String> topics,
+
+        @JsonProperty("html_url")
+        String htmlUrl,
+
+        int size,
+
+        boolean archived,
 
         @JsonProperty("created_at")
         String createdAt,

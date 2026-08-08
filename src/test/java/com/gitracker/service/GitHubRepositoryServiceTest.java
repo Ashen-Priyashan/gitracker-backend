@@ -34,11 +34,8 @@ class GitHubRepositoryServiceTest {
     @InjectMocks
     private GitHubRepositoryService gitHubRepositoryService;
 
-    @Test
-    void shouldSaveNewRepository() {
-
-        // Arrange
-        GitHubRepositoryDto repositoryDto = new GitHubRepositoryDto(
+    private GitHubRepositoryDto createSampleDto() {
+        return new GitHubRepositoryDto(
                 1L,
                 "gitracker",
                 "GitHub analytics",
@@ -46,9 +43,23 @@ class GitHubRepositoryServiceTest {
                 20,
                 100,
                 "Java",
+                "main",
+                2,
+                null,
+                List.of("analytics", "github"),
+                "https://github.com/octocat/gitracker",
+                1024,
+                false,
                 "2024-01-01T00:00:00Z",
                 "2024-01-02T00:00:00Z"
         );
+    }
+
+    @Test
+    void shouldSaveNewRepository() {
+
+        // Arrange
+        GitHubRepositoryDto repositoryDto = createSampleDto();
 
         GitHubUser owner = GitHubUser.builder()
                 .username("octocat")
@@ -70,6 +81,8 @@ class GitHubRepositoryServiceTest {
         // Assert
         assertEquals(1, response.size());
         assertEquals("gitracker", response.getFirst().name());
+        assertEquals("main", response.getFirst().defaultBranch());
+        assertEquals(2, response.getFirst().openIssues());
 
         verify(repositoryRepository).save(any(Repository.class));
     }
@@ -78,17 +91,7 @@ class GitHubRepositoryServiceTest {
     void shouldNotSaveExistingRepository() {
 
         // Arrange
-        GitHubRepositoryDto repositoryDto = new GitHubRepositoryDto(
-                1L,
-                "gitracker",
-                "GitHub analytics",
-                100,
-                20,
-                100,
-                "Java",
-                "2024-01-01T00:00:00Z",
-                "2024-01-02T00:00:00Z"
-        );
+        GitHubRepositoryDto repositoryDto = createSampleDto();
 
         GitHubUser owner = GitHubUser.builder()
                 .username("octocat")
@@ -119,17 +122,7 @@ class GitHubRepositoryServiceTest {
     void shouldReturnRepositoriesWhenOwnerDoesNotExist() {
 
         // Arrange
-        GitHubRepositoryDto repositoryDto = new GitHubRepositoryDto(
-                1L,
-                "gitracker",
-                "GitHub analytics",
-                100,
-                20,
-                100,
-                "Java",
-                "2024-01-01T00:00:00Z",
-                "2024-01-02T00:00:00Z"
-        );
+        GitHubRepositoryDto repositoryDto = createSampleDto();
 
         when(gitHubApiClient.getRepositories("octocat"))
                 .thenReturn(new GitHubRepositoryDto[]{repositoryDto});

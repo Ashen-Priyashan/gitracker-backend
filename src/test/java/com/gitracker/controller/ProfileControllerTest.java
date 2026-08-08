@@ -59,6 +59,13 @@ class ProfileControllerTest {
                 20,
                 100,
                 "Java",
+                "main",
+                0,
+                "MIT License",
+                List.of("analytics"),
+                "https://github.com/octocat/gitracker",
+                1024,
+                false,
                 "2024-01-01T00:00:00Z",
                 "2024-01-02T00:00:00Z"
         );

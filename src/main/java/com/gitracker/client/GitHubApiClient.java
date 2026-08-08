@@ -1,5 +1,6 @@
 package com.gitracker.client;
 
+import com.gitracker.dto.GitHubReadmeDto;
 import com.gitracker.dto.GitHubRepositoryDto;
 import com.gitracker.dto.GitHubUserDto;
 import com.gitracker.exception.RateLimitExceededException;
@@ -25,7 +26,7 @@ public class GitHubApiClient {
         RestClient.Builder builder = RestClient.builder()
                 .baseUrl(baseUrl);
 
-        if (!token.isBlank()) {
+        if (token != null && !token.isBlank()) {
             builder.defaultHeader(
                     HttpHeaders.AUTHORIZATION,
                     "Bearer " + token
@@ -73,6 +74,24 @@ public class GitHubApiClient {
 
         } catch (HttpClientErrorException.Forbidden exception) {
 
+            throw new RateLimitExceededException(
+                    "GitHub API rate limit exceeded. Please try again later."
+            );
+        }
+    }
+
+    public GitHubReadmeDto getReadme(String username, String repoName) {
+
+        try {
+            return restClient.get()
+                    .uri("/repos/{username}/{repoName}/readme", username, repoName)
+                    .retrieve()
+                    .body(GitHubReadmeDto.class);
+
+        } catch (HttpClientErrorException.NotFound exception) {
+            return null;
+
+        } catch (HttpClientErrorException.Forbidden exception) {
             throw new RateLimitExceededException(
                     "GitHub API rate limit exceeded. Please try again later."
             );

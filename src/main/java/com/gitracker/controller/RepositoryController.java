@@ -1,5 +1,6 @@
 package com.gitracker.controller;
 
+import com.gitracker.dto.ReadmeResponse;
 import com.gitracker.dto.RepositoryResponse;
 import com.gitracker.service.GitHubRepositoryService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -13,7 +14,7 @@ import java.util.List;
 
 @Tag(
         name = "Repositories",
-        description = "Operations for retrieving GitHub repositories"
+        description = "Operations for retrieving GitHub repositories and repository metadata"
 )
 @RestController
 @RequestMapping("/api/users")
@@ -56,5 +57,29 @@ public class RepositoryController {
     ) {
 
         return repositoryService.getRepositories(username);
+    }
+
+    @Operation(
+            summary = "Get repository README",
+            description = "Retrieves the README file content for a specific GitHub repository."
+    )
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "README retrieved successfully"
+            ),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "README or Repository not found"
+            )
+    })
+    @GetMapping("/{username}/repositories/{repoName}/readme")
+    public ReadmeResponse getReadme(
+            @Parameter(description = "GitHub username", example = "octocat")
+            @PathVariable String username,
+            @Parameter(description = "Repository name", example = "Hello-World")
+            @PathVariable String repoName
+    ) {
+        return repositoryService.getReadme(username, repoName);
     }
 }

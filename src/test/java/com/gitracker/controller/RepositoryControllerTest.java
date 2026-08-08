@@ -34,6 +34,13 @@ class RepositoryControllerTest {
                 20,
                 100,
                 "Java",
+                "main",
+                0,
+                "MIT License",
+                List.of("analytics"),
+                "https://github.com/octocat/gitracker",
+                1024,
+                false,
                 "2024-01-01T00:00:00Z",
                 "2024-01-02T00:00:00Z"
         );
@@ -47,6 +54,7 @@ class RepositoryControllerTest {
                 .andExpect(jsonPath("$[0].name").value("gitracker"))
                 .andExpect(jsonPath("$[0].language").value("Java"))
                 .andExpect(jsonPath("$[0].stars").value(100))
-                .andExpect(jsonPath("$[0].forks").value(20));
+                .andExpect(jsonPath("$[0].forks").value(20))
+                .andExpect(jsonPath("$[0].defaultBranch").value("main"));
     }
 }

@@ -40,7 +40,7 @@ public class GitHubUserService {
                     user.getFollowers(),
                     user.getFollowing(),
                     user.getAvatarUrl(),
-                    user.getCreatedAt().toString()
+                    user.getCreatedAt() != null ? user.getCreatedAt().toString() : null
             );
         }
 

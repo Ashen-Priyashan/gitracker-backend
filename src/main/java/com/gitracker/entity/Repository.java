@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Entity
 @Table(name = "repositories")
@@ -32,6 +33,23 @@ public class Repository {
     private Integer forks;
 
     private Integer watchers;
+
+    private String defaultBranch;
+
+    private Integer openIssues;
+
+    private String licenseName;
+
+    @ElementCollection
+    @CollectionTable(name = "repository_topics", joinColumns = @JoinColumn(name = "repository_id"))
+    @Column(name = "topic")
+    private List<String> topics;
+
+    private String htmlUrl;
+
+    private Integer size;
+
+    private Boolean archived;
 
     @ManyToOne
     @JoinColumn(name = "github_user_id")

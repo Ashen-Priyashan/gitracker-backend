@@ -26,6 +26,9 @@ class GitHubAuthServiceTest {
     @Mock
     private GitHubAppConnectionRepository connectionRepository;
 
+    @Mock
+    private com.gitracker.repository.UserRepository userRepository;
+
     private GitHubAuthService gitHubAuthService;
 
     @BeforeEach
@@ -36,7 +39,8 @@ class GitHubAuthServiceTest {
                 "http://localhost:8080/api/github/callback",
                 "http://localhost:5173",
                 gitHubApiClient,
-                connectionRepository
+                connectionRepository,
+                userRepository
         );
     }
 

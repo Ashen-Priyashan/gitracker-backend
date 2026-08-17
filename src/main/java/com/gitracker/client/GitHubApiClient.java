@@ -97,4 +97,40 @@ public class GitHubApiClient {
             );
         }
     }
+
+    public GitHubUserDto getAuthenticatedUser(String accessToken) {
+        try {
+            return restClient.get()
+                    .uri("/user")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
+                    .retrieve()
+                    .body(GitHubUserDto.class);
+
+        } catch (HttpClientErrorException.Unauthorized exception) {
+            throw new ResourceNotFoundException("Invalid or expired GitHub access token.");
+
+        } catch (HttpClientErrorException.Forbidden exception) {
+            throw new RateLimitExceededException(
+                    "GitHub API rate limit exceeded. Please try again later."
+            );
+        }
+    }
+
+    public GitHubRepositoryDto[] getAuthenticatedUserRepositories(String accessToken) {
+        try {
+            return restClient.get()
+                    .uri("/user/repos?type=all&sort=updated")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
+                    .retrieve()
+                    .body(GitHubRepositoryDto[].class);
+
+        } catch (HttpClientErrorException.Unauthorized exception) {
+            throw new ResourceNotFoundException("Invalid or expired GitHub access token.");
+
+        } catch (HttpClientErrorException.Forbidden exception) {
+            throw new RateLimitExceededException(
+                    "GitHub API rate limit exceeded. Please try again later."
+            );
+        }
+    }
 }

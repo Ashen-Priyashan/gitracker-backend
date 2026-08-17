@@ -39,3 +39,9 @@ build/
 
 # Keep the template
 !.env.example
+
+# Credentials and Keys
+*.pem
+*.key
+*.p12
+*.pfx

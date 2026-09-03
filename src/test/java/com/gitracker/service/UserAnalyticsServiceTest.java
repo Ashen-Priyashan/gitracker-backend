@@ -89,6 +89,46 @@ class UserAnalyticsServiceTest {
     }
 
     @Test
+    void shouldHandleNullStarsAndForksWithoutNullPointerException() {
+        GitHubUser user = GitHubUser.builder()
+                .username("octocat")
+                .build();
+
+        Repository repoWithNulls = Repository.builder()
+                .stars(null)
+                .forks(null)
+                .language("TypeScript")
+                .owner(user)
+                .build();
+
+        Repository normalRepo = Repository.builder()
+                .stars(5)
+                .forks(2)
+                .language("TypeScript")
+                .owner(user)
+                .build();
+
+        when(gitHubUserRepository.findByUsername("octocat"))
+                .thenReturn(Optional.of(user));
+
+        when(repositoryRepository.findByOwner(user))
+                .thenReturn(List.of(repoWithNulls, normalRepo));
+
+        when(userAnalyticsRepository.findByGithubUser(user))
+                .thenReturn(Optional.empty());
+
+        when(userAnalyticsRepository.save(any(UserAnalytics.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        UserAnalytics analytics = userAnalyticsService.generateAnalytics("octocat");
+
+        assertEquals(2, analytics.getTotalRepositories());
+        assertEquals(5, analytics.getTotalStars());
+        assertEquals(2, analytics.getTotalForks());
+        assertEquals("TypeScript", analytics.getMostUsedLanguage());
+    }
+
+    @Test
     void shouldUpdateExistingAnalytics() {
 
         // Arrange

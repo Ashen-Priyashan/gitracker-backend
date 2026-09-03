@@ -47,11 +47,11 @@ public class UserAnalyticsService {
         int totalRepositories = repositories.size();
 
         int totalStars = repositories.stream()
-                .mapToInt(Repository::getStars)
+                .mapToInt(repo -> repo.getStars() != null ? repo.getStars() : 0)
                 .sum();
 
         int totalForks = repositories.stream()
-                .mapToInt(Repository::getForks)
+                .mapToInt(repo -> repo.getForks() != null ? repo.getForks() : 0)
                 .sum();
 
         String mostUsedLanguage = repositories.stream()

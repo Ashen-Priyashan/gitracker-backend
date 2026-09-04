@@ -5,25 +5,38 @@ import com.gitracker.dto.GitHubRepositoryDto;
 import com.gitracker.dto.GitHubUserDto;
 import com.gitracker.exception.RateLimitExceededException;
 import com.gitracker.exception.ResourceNotFoundException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
+
+import java.time.Duration;
 
 @Component
 public class GitHubApiClient {
 
     private final RestClient restClient;
 
+    @Autowired
     public GitHubApiClient(
             @Value("${github.api.base-url}")
             String baseUrl,
             @Value("${github.api.token:}")
-            String token
+            String token,
+            @Value("${github.api.connect-timeout-seconds:5}")
+            int connectTimeoutSeconds,
+            @Value("${github.api.read-timeout-seconds:10}")
+            int readTimeoutSeconds
     ) {
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(Duration.ofSeconds(connectTimeoutSeconds));
+        requestFactory.setReadTimeout(Duration.ofSeconds(readTimeoutSeconds));
 
         RestClient.Builder builder = RestClient.builder()
+                .requestFactory(requestFactory)
                 .baseUrl(baseUrl);
 
         if (token != null && !token.isBlank()) {
@@ -34,6 +47,13 @@ public class GitHubApiClient {
         }
 
         this.restClient = builder.build();
+    }
+
+    public GitHubApiClient(
+            String baseUrl,
+            String token
+    ) {
+        this(baseUrl, token, 5, 10);
     }
 
     public GitHubUserDto getUser(String username) {

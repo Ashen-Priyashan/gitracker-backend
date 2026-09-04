@@ -44,6 +44,7 @@ public class SecurityConfig {
                         .ignoringRequestMatchers(
                                 "/api/auth/login",
                                 "/api/auth/signup",
+                                "/api/auth/link-github",
                                 "/api/github/callback"
                         )
                 )
@@ -77,6 +78,7 @@ public class SecurityConfig {
                         ).permitAll()
                         .requestMatchers(
                                 "/api/auth/logout",
+                                "/api/auth/link-github",
                                 "/api/github/**",
                                 "/api/users/**",
                                 "/api/profile/**",

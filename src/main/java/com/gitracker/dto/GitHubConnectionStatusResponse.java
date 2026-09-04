@@ -20,7 +20,14 @@ public record GitHubConnectionStatusResponse(
         String avatarUrl,
 
         @Schema(description = "Connected timestamp ISO string")
-        String connectedAt
+        String connectedAt,
+
+        @Schema(description = "Last synchronization timestamp ISO string")
+        String lastSyncedAt
 
 ) implements Serializable {
+
+    public GitHubConnectionStatusResponse(boolean connected, String username, String avatarUrl, String connectedAt) {
+        this(connected, username, avatarUrl, connectedAt, null);
+    }
 }

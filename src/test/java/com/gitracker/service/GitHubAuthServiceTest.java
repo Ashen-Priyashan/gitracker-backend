@@ -71,11 +71,13 @@ class GitHubAuthServiceTest {
         MockHttpSession session = new MockHttpSession();
         session.setAttribute("CONNECTED_GITHUB_USERNAME", "octocat");
 
+        LocalDateTime now = LocalDateTime.now();
         GitHubAppConnection connection = GitHubAppConnection.builder()
                 .githubId(12345L)
                 .username("octocat")
                 .avatarUrl("https://avatar.url")
-                .connectedAt(LocalDateTime.now())
+                .connectedAt(now)
+                .lastSyncedAt(now)
                 .build();
 
         when(connectionRepository.findByUsername("octocat")).thenReturn(Optional.of(connection));
@@ -85,6 +87,7 @@ class GitHubAuthServiceTest {
         assertTrue(status.connected());
         assertEquals("octocat", status.username());
         assertEquals("https://avatar.url", status.avatarUrl());
+        assertEquals(now.toString(), status.lastSyncedAt());
     }
 
     @Test

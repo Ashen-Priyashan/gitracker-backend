@@ -12,6 +12,7 @@ import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -37,7 +38,7 @@ class SecurityAuthorizationIntegrationTest {
 
     @Test
     void shouldRejectUnauthenticatedRequestToLogout() throws Exception {
-        mockMvc.perform(post("/api/auth/logout"))
+        mockMvc.perform(post("/api/auth/logout").with(csrf()))
                 .andExpect(status().isUnauthorized());
     }
 

@@ -88,13 +88,21 @@ When the application is running:
 | Method | Endpoint | Description |
 | --- | --- | --- |
 | `GET` | `/api/health` | Checks whether the API is running. |
+| `GET` | `/actuator/health` | Spring Boot Actuator comprehensive health check. |
+| `GET` | `/actuator/health/liveness` | Kubernetes/Docker liveness probe. |
+| `GET` | `/actuator/health/readiness` | Kubernetes/Docker readiness probe. |
 | `GET` | `/api/profile/{username}` | Returns a combined profile summary, repositories, and analytics. |
 | `GET` | `/api/users/{username}` | Returns a GitHub user profile. |
 | `GET` | `/api/users/{username}/repositories` | Returns public repositories for a user. |
 | `GET` | `/api/users/{username}/repositories/{repoName}/readme` | Returns repository README content. |
+| `GET` | `/api/repositories/{username}/{repoName}` | Returns single repository details. |
 | `GET` | `/api/users/{username}/language-analytics` | Returns language analytics for a user. |
 | `GET` | `/api/users/{username}/repository-analytics` | Returns repository analytics for a user. |
 | `GET` | `/api/analytics/{username}` | Generates user-level analytics. |
+| `GET` | `/api/auth/login` | User session login endpoint. |
+| `GET` | `/api/auth/signup` | User account registration. |
+| `POST` | `/api/auth/logout` | Terminates active user session (requires CSRF). |
+| `GET` | `/api/auth/me` | Current authenticated user profile and issues XSRF-TOKEN cookie. |
 | `GET` | `/api/github/authorize` | Initiates GitHub App authorization flow. |
 | `GET` | `/api/github/callback` | Handles OAuth callback from GitHub. |
 | `GET` | `/api/github/status` | Returns active session GitHub connection status. |
@@ -137,42 +145,45 @@ Set the following environment variables in your `.env` or system environment:
 
 ```env
 GITHUB_APP_ID=your_github_app_id
-GITHUB_CLIENT_ID=your_github_client_id
-GITHUB_CLIENT_SECRET=your_github_client_secret
+GITHUB_CLIENT_ID=your_github_app_client_id
+GITHUB_CLIENT_SECRET=your_github_app_client_secret
 GITHUB_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\n...\n-----END RSA PRIVATE KEY-----"
 GITHUB_REDIRECT_URI=http://localhost:8080/api/github/callback
 FRONTEND_URL=http://localhost:5173
+ENCRYPTION_SECRET_KEY=your_secure_32_character_encryption_key_here!
 ```
 
 > [!CAUTION]
 > Never commit real secrets, client secrets, or private keys to source control.
 
-### Connecting GitHub Account Flow
+## Database Migrations (Flyway)
 
-1. Start both backend (`http://localhost:8080`) and frontend (`http://localhost:5173`).
-2. Navigate to `http://localhost:5173/settings`.
-3. Under **GitHub Account Connection**, click **Connect GitHub**.
-4. Authorize Gitracker on the GitHub authorization page.
-5. GitHub will redirect back to `http://localhost:8080/api/github/callback`, which establishes the session and redirects to `http://localhost:5173/settings?connected=true`.
+Database schema migrations are managed automatically by Flyway in `src/main/resources/db/migration/`.
+- `V1__initial_schema.sql`: Establishes initial PostgreSQL tables (users, github_users, repositories, user_analytics, repository_analytics, language_analytics) and indexes.
+- In production (`prod` profile), Hibernate DDL is set to `validate`, ensuring no unverified schema modifications occur.
 
 ## Configuration
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
+| `SPRING_PROFILES_ACTIVE` | `dev` | Active Spring profile (`dev` or `prod`). |
 | `DB_URL` | `jdbc:postgresql://localhost:5433/gitracker` | PostgreSQL JDBC connection URL. |
 | `DB_USERNAME` | `postgres` | PostgreSQL username. |
 | `DB_PASSWORD` | `postgres` | PostgreSQL password. |
+| `CACHE_TYPE` | `none` | Cache backend provider (`none` or `redis`). |
 | `REDIS_HOST` | `localhost` | Redis host. |
 | `REDIS_PORT` | `6379` | Redis port. |
+| `ENCRYPTION_SECRET_KEY` | Empty | AES-256-GCM 32-character secret key for encrypting OAuth tokens. |
 | `GITHUB_API_BASE_URL` | `https://api.github.com` | GitHub REST API base URL. |
 | `GITHUB_API_TOKEN` | Empty | GitHub personal access token. |
+| `GITHUB_API_CONNECT_TIMEOUT_SECONDS` | `5` | Connect timeout for GitHub API HTTP requests. |
+| `GITHUB_API_READ_TIMEOUT_SECONDS` | `10` | Read timeout for GitHub API HTTP requests. |
 | `GITHUB_APP_ID` | Empty | GitHub App ID. |
 | `GITHUB_CLIENT_ID` | Empty | GitHub App OAuth Client ID. |
 | `GITHUB_CLIENT_SECRET` | Empty | GitHub App OAuth Client Secret. |
 | `GITHUB_PRIVATE_KEY` | Empty | GitHub App Private Key. |
 | `GITHUB_REDIRECT_URI` | `http://localhost:8080/api/github/callback` | OAuth redirect URI. |
 | `FRONTEND_URL` | `http://localhost:5173` | Frontend application URL. |
-
 
 ## Testing and Build
 
@@ -185,35 +196,35 @@ Run the test suite:
 On Windows:
 
 ```powershell
-.\mvnw.cmd test
+$env:MAVEN_OPTS = "-Xms128m -Xmx384m"
+.\mvnw.cmd test "-DargLine=-Xmx256m"
 ```
 
-Tests use an in-memory H2 database configuration.
+Tests use an in-memory H2 database configuration and mock external GitHub calls.
 
 Create a production JAR:
 
 ```bash
-./mvnw clean package
+./mvnw clean package -DskipTests
 ```
 
-## Project Structure
+## Running the Full Stack with Docker Compose
 
-```text
-src/main/java/com/gitracker/
-├── client/       # GitHub API client
-├── config/       # Cache, CORS, and OpenAPI configuration
-├── controller/   # REST endpoints
-├── dto/          # API request and response models
-├── entity/       # JPA entities
-├── exception/    # Error handling
-├── repository/   # Spring Data repositories
-└── service/      # GitHub integration and analytics logic
+To build and run all services (PostgreSQL, Redis, Backend, and Frontend) with full healthchecks:
+
+```bash
+docker compose up --build -d
 ```
 
-## Stop the Supporting Services
+| Service | Host Port | Internal Port | Healthcheck |
+| --- | --- | --- | --- |
+| `postgres` | `5433` | `5432` | `pg_isready` |
+| `redis` | `6379` | `6379` | `redis-cli ping` |
+| `backend` | `8080` | `8080` | `/actuator/health` |
+| `frontend` | `5173` | `80` | Nginx SPA |
+
+To stop the services:
 
 ```bash
 docker compose down
 ```
-
-This stops PostgreSQL and Redis while preserving the named PostgreSQL volume. Use `docker compose down -v` only if you intentionally want to remove the local database data.

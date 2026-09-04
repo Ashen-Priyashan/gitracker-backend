@@ -12,9 +12,11 @@ import com.gitracker.repository.RepositoryRepository;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -44,37 +46,43 @@ public class GitHubRepositoryService {
         GitHubUser owner = gitHubUserRepository
                 .findByUsername(username)
                 .orElse(null);
-        Set<Long> existingRepoIds = owner == null
-                ? Set.of()
+        Map<Long, Repository> existingRepoMap = owner == null
+                ? Map.of()
                 : repositoryRepository.findByOwner(owner)
                         .stream()
-                        .map(Repository::getRepoId)
-                        .collect(Collectors.toSet());
+                        .collect(Collectors.toMap(Repository::getRepoId, r -> r, (r1, r2) -> r1));
+
+        if (owner != null) {
+            owner.setUpdatedAt(LocalDateTime.now());
+            gitHubUserRepository.save(owner);
+        }
 
         return Arrays.stream(repositories)
                 .map(repo -> {
 
                     String licenseName = repo.license() != null ? repo.license().name() : null;
 
-                    if (owner != null && !existingRepoIds.contains(repo.id())) {
-
-                        Repository repository = Repository.builder()
-                                .repoId(repo.id())
-                                .name(repo.name())
-                                .description(repo.description())
-                                .language(repo.language())
-                                .stars(repo.stars())
-                                .forks(repo.forks())
-                                .watchers(repo.watchers())
-                                .defaultBranch(repo.defaultBranch())
-                                .openIssues(repo.openIssues())
-                                .licenseName(licenseName)
-                                .topics(repo.topics())
-                                .htmlUrl(repo.htmlUrl())
-                                .size(repo.size())
-                                .archived(repo.archived())
-                                .owner(owner)
-                                .build();
+                    if (owner != null) {
+                        Repository repository = existingRepoMap.get(repo.id());
+                        if (repository == null) {
+                            repository = Repository.builder()
+                                    .repoId(repo.id())
+                                    .owner(owner)
+                                    .build();
+                        }
+                        repository.setName(repo.name());
+                        repository.setDescription(repo.description());
+                        repository.setLanguage(repo.language());
+                        repository.setStars(repo.stars());
+                        repository.setForks(repo.forks());
+                        repository.setWatchers(repo.watchers());
+                        repository.setDefaultBranch(repo.defaultBranch());
+                        repository.setOpenIssues(repo.openIssues());
+                        repository.setLicenseName(licenseName);
+                        repository.setTopics(repo.topics());
+                        repository.setHtmlUrl(repo.htmlUrl());
+                        repository.setSize(repo.size());
+                        repository.setArchived(repo.archived());
 
                         repositoryRepository.save(repository);
                     }

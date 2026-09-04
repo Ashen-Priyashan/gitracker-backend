@@ -17,6 +17,7 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
 
+import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -118,6 +119,7 @@ public class GitHubAuthService {
             connection.setAccessToken(accessToken);
             connection.setTokenType(tokenType);
             connection.setScope(scope);
+            connection.setLastSyncedAt(LocalDateTime.now());
 
             GitHubAppConnection savedConnection = connectionRepository.save(connection);
 
@@ -150,20 +152,21 @@ public class GitHubAuthService {
                         true,
                         conn.getUsername(),
                         conn.getAvatarUrl(),
-                        conn.getConnectedAt() != null ? conn.getConnectedAt().toString() : null
+                        conn.getConnectedAt() != null ? conn.getConnectedAt().toString() : null,
+                        conn.getLastSyncedAt() != null ? conn.getLastSyncedAt().toString() : null
                 );
             }
         }
 
         String username = (String) session.getAttribute(CONNECTED_USER_KEY);
         if (username == null || username.isBlank()) {
-            return new GitHubConnectionStatusResponse(false, null, null, null);
+            return new GitHubConnectionStatusResponse(false, null, null, null, null);
         }
 
         Optional<GitHubAppConnection> connectionOpt = connectionRepository.findByUsername(username);
         if (connectionOpt.isEmpty()) {
             session.removeAttribute(CONNECTED_USER_KEY);
-            return new GitHubConnectionStatusResponse(false, null, null, null);
+            return new GitHubConnectionStatusResponse(false, null, null, null, null);
         }
 
         GitHubAppConnection connection = connectionOpt.get();
@@ -171,7 +174,8 @@ public class GitHubAuthService {
                 true,
                 connection.getUsername(),
                 connection.getAvatarUrl(),
-                connection.getConnectedAt() != null ? connection.getConnectedAt().toString() : null
+                connection.getConnectedAt() != null ? connection.getConnectedAt().toString() : null,
+                connection.getLastSyncedAt() != null ? connection.getLastSyncedAt().toString() : null
         );
     }
 
@@ -208,6 +212,9 @@ public class GitHubAuthService {
                 .orElseThrow(() -> new IllegalStateException("GitHub connection details not found."));
 
         GitHubRepositoryDto[] repos = gitHubApiClient.getAuthenticatedUserRepositories(connection.getAccessToken());
+
+        connection.setLastSyncedAt(LocalDateTime.now());
+        connectionRepository.save(connection);
 
         return Arrays.stream(repos)
                 .map(repo -> new RepositoryResponse(

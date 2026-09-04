@@ -38,6 +38,8 @@ public class GitHubAppConnection {
 
     private LocalDateTime connectedAt;
 
+    private LocalDateTime lastSyncedAt;
+
     private LocalDateTime updatedAt;
 
     @PrePersist

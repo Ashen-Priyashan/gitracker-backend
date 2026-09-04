@@ -85,10 +85,11 @@ class GitHubRepositoryServiceTest {
         assertEquals(2, response.getFirst().openIssues());
 
         verify(repositoryRepository).save(any(Repository.class));
+        verify(gitHubUserRepository).save(owner);
     }
 
     @Test
-    void shouldNotSaveExistingRepository() {
+    void shouldUpdateAndSaveExistingRepository() {
 
         // Arrange
         GitHubRepositoryDto repositoryDto = createSampleDto();
@@ -99,6 +100,8 @@ class GitHubRepositoryServiceTest {
 
         Repository existingRepository = Repository.builder()
                 .repoId(1L)
+                .name("old-name")
+                .stars(0)
                 .owner(owner)
                 .build();
 
@@ -112,10 +115,14 @@ class GitHubRepositoryServiceTest {
                 .thenReturn(List.of(existingRepository));
 
         // Act
-        gitHubRepositoryService.getRepositories("octocat");
+        List<RepositoryResponse> response = gitHubRepositoryService.getRepositories("octocat");
 
         // Assert
-        verify(repositoryRepository, never()).save(any());
+        assertEquals(1, response.size());
+        assertEquals("gitracker", existingRepository.getName());
+        assertEquals(100, existingRepository.getStars());
+        verify(repositoryRepository).save(existingRepository);
+        verify(gitHubUserRepository).save(owner);
     }
 
     @Test

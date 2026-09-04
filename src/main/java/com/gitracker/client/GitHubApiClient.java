@@ -11,6 +11,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -39,6 +40,10 @@ public class GitHubApiClient {
         this.restClient = builder.build();
     }
 
+    GitHubApiClient(RestClient restClient) {
+        this.restClient = restClient;
+    }
+
     public GitHubUserDto getUser(String username) {
 
         try {
@@ -61,26 +66,46 @@ public class GitHubApiClient {
         }
     }
 
+    private static final int PER_PAGE = 100;
+    private static final int MAX_PAGES = 10;
+
     public GitHubRepositoryDto[] getRepositories(String username) {
+        List<GitHubRepositoryDto> allRepositories = new ArrayList<>();
+        int page = 1;
 
-        try {
-            return restClient.get()
-                    .uri("/users/{username}/repos", username)
-                    .retrieve()
-                    .body(GitHubRepositoryDto[].class);
+        while (page <= MAX_PAGES) {
+            try {
+                GitHubRepositoryDto[] batch = restClient.get()
+                        .uri("/users/{username}/repos?per_page={perPage}&page={page}&sort=updated", username, PER_PAGE, page)
+                        .retrieve()
+                        .body(GitHubRepositoryDto[].class);
 
-        } catch (HttpClientErrorException.NotFound exception) {
+                if (batch == null || batch.length == 0) {
+                    break;
+                }
 
-            throw new ResourceNotFoundException(
-                    "GitHub user '" + username + "' not found"
-            );
+                allRepositories.addAll(List.of(batch));
 
-        } catch (HttpClientErrorException.Forbidden exception) {
+                if (batch.length < PER_PAGE) {
+                    break;
+                }
 
-            throw new RateLimitExceededException(
-                    "GitHub API rate limit exceeded. Please try again later."
-            );
+                page++;
+            } catch (HttpClientErrorException.NotFound exception) {
+                if (page == 1) {
+                    throw new ResourceNotFoundException(
+                            "GitHub user '" + username + "' not found"
+                    );
+                }
+                break;
+            } catch (HttpClientErrorException.Forbidden exception) {
+                throw new RateLimitExceededException(
+                        "GitHub API rate limit exceeded. Please try again later."
+                );
+            }
         }
+
+        return allRepositories.toArray(new GitHubRepositoryDto[0]);
     }
 
     public GitHubReadmeDto getReadme(String username, String repoName) {
@@ -120,21 +145,38 @@ public class GitHubApiClient {
     }
 
     public GitHubRepositoryDto[] getAuthenticatedUserRepositories(String accessToken) {
-        try {
-            return restClient.get()
-                    .uri("/user/repos?type=all&sort=updated")
-                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
-                    .retrieve()
-                    .body(GitHubRepositoryDto[].class);
+        List<GitHubRepositoryDto> allRepositories = new ArrayList<>();
+        int page = 1;
 
-        } catch (HttpClientErrorException.Unauthorized exception) {
-            throw new ResourceNotFoundException("Invalid or expired GitHub access token.");
+        while (page <= MAX_PAGES) {
+            try {
+                GitHubRepositoryDto[] batch = restClient.get()
+                        .uri("/user/repos?type=all&sort=updated&per_page={perPage}&page={page}", PER_PAGE, page)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
+                        .retrieve()
+                        .body(GitHubRepositoryDto[].class);
 
-        } catch (HttpClientErrorException.Forbidden exception) {
-            throw new RateLimitExceededException(
-                    "GitHub API rate limit exceeded. Please try again later."
-            );
+                if (batch == null || batch.length == 0) {
+                    break;
+                }
+
+                allRepositories.addAll(List.of(batch));
+
+                if (batch.length < PER_PAGE) {
+                    break;
+                }
+
+                page++;
+            } catch (HttpClientErrorException.Unauthorized exception) {
+                throw new ResourceNotFoundException("Invalid or expired GitHub access token.");
+            } catch (HttpClientErrorException.Forbidden exception) {
+                throw new RateLimitExceededException(
+                        "GitHub API rate limit exceeded. Please try again later."
+                );
+            }
         }
+
+        return allRepositories.toArray(new GitHubRepositoryDto[0]);
     }
 
     @SuppressWarnings("rawtypes")

@@ -1,5 +1,6 @@
 package com.gitracker.service;
 
+import com.gitracker.dto.GitHubUserResponse;
 import com.gitracker.entity.GitHubUser;
 import com.gitracker.entity.Repository;
 import com.gitracker.entity.UserAnalytics;
@@ -30,6 +31,12 @@ class UserAnalyticsServiceTest {
 
     @Mock
     private UserAnalyticsRepository userAnalyticsRepository;
+
+    @Mock
+    private GitHubUserService gitHubUserService;
+
+    @Mock
+    private GitHubRepositoryService gitHubRepositoryService;
 
     @InjectMocks
     private UserAnalyticsService userAnalyticsService;
@@ -89,6 +96,48 @@ class UserAnalyticsServiceTest {
     }
 
     @Test
+    void shouldSyncUserAndRepositoriesWhenNotCachedLocally() {
+        GitHubUser user = GitHubUser.builder()
+                .username("octocat")
+                .build();
+
+        Repository repo = Repository.builder()
+                .stars(15)
+                .forks(3)
+                .language("Kotlin")
+                .owner(user)
+                .build();
+
+        when(gitHubUserRepository.findByUsername("octocat"))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(user));
+
+        when(gitHubUserService.getUser("octocat"))
+                .thenReturn(new GitHubUserResponse("octocat", "Octocat", null, null, 10, 5, null, null));
+
+        when(repositoryRepository.findByOwner(user))
+                .thenReturn(List.of())
+                .thenReturn(List.of(repo));
+
+        when(userAnalyticsRepository.findByGithubUser(user))
+                .thenReturn(Optional.empty());
+
+        when(userAnalyticsRepository.save(any(UserAnalytics.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        UserAnalytics analytics = userAnalyticsService.generateAnalytics("octocat");
+
+        assertEquals(1, analytics.getTotalRepositories());
+        assertEquals(15, analytics.getTotalStars());
+        assertEquals(3, analytics.getTotalForks());
+        assertEquals("Kotlin", analytics.getMostUsedLanguage());
+
+        verify(gitHubUserService).getUser("octocat");
+        verify(gitHubRepositoryService).getRepositories("octocat");
+        verify(userAnalyticsRepository).save(any(UserAnalytics.class));
+    }
+
+    @Test
     void shouldUpdateExistingAnalytics() {
 
         // Arrange
@@ -128,6 +177,9 @@ class UserAnalyticsServiceTest {
         // Arrange
         when(gitHubUserRepository.findByUsername("octocat"))
                 .thenReturn(Optional.empty());
+
+        doThrow(new ResourceNotFoundException("GitHub user not found"))
+                .when(gitHubUserService).getUser("octocat");
 
         // Act + Assert
         assertThrows(

@@ -20,38 +20,53 @@ public class UserAnalyticsService {
     private final GitHubUserRepository gitHubUserRepository;
     private final RepositoryRepository repositoryRepository;
     private final UserAnalyticsRepository userAnalyticsRepository;
+    private final GitHubUserService gitHubUserService;
+    private final GitHubRepositoryService gitHubRepositoryService;
 
     public UserAnalyticsService(
             GitHubUserRepository gitHubUserRepository,
             RepositoryRepository repositoryRepository,
-            UserAnalyticsRepository userAnalyticsRepository
+            UserAnalyticsRepository userAnalyticsRepository,
+            GitHubUserService gitHubUserService,
+            GitHubRepositoryService gitHubRepositoryService
     ) {
         this.gitHubUserRepository = gitHubUserRepository;
         this.repositoryRepository = repositoryRepository;
         this.userAnalyticsRepository = userAnalyticsRepository;
+        this.gitHubUserService = gitHubUserService;
+        this.gitHubRepositoryService = gitHubRepositoryService;
     }
 
     public UserAnalytics generateAnalytics(String username) {
 
         GitHubUser user = gitHubUserRepository
                 .findByUsername(username)
-                .orElseThrow(() ->
-                       new ResourceNotFoundException(
-                      "GitHub user not found"
-                       )
-         );
+                .orElseGet(() -> {
+                    gitHubUserService.getUser(username);
+                    return gitHubUserRepository.findByUsername(username)
+                            .orElseThrow(() ->
+                                    new ResourceNotFoundException(
+                                            "GitHub user not found"
+                                    )
+                            );
+                });
 
         List<Repository> repositories =
-               repositoryRepository.findByOwner(user);
+                repositoryRepository.findByOwner(user);
+
+        if (repositories.isEmpty()) {
+            gitHubRepositoryService.getRepositories(username);
+            repositories = repositoryRepository.findByOwner(user);
+        }
 
         int totalRepositories = repositories.size();
 
         int totalStars = repositories.stream()
-                .mapToInt(Repository::getStars)
+                .mapToInt(repo -> repo.getStars() != null ? repo.getStars() : 0)
                 .sum();
 
         int totalForks = repositories.stream()
-                .mapToInt(Repository::getForks)
+                .mapToInt(repo -> repo.getForks() != null ? repo.getForks() : 0)
                 .sum();
 
         String mostUsedLanguage = repositories.stream()
@@ -72,14 +87,14 @@ public class UserAnalyticsService {
                         UserAnalytics.builder()
                                 .githubUser(user)
                                 .build()
-        );
+                );
 
-analytics.setTotalRepositories(totalRepositories);
-analytics.setTotalStars(totalStars);
-analytics.setTotalForks(totalForks);
-analytics.setMostUsedLanguage(mostUsedLanguage);
-analytics.setCalculatedAt(LocalDateTime.now());
+        analytics.setTotalRepositories(totalRepositories);
+        analytics.setTotalStars(totalStars);
+        analytics.setTotalForks(totalForks);
+        analytics.setMostUsedLanguage(mostUsedLanguage);
+        analytics.setCalculatedAt(LocalDateTime.now());
 
-return userAnalyticsRepository.save(analytics);
+        return userAnalyticsRepository.save(analytics);
     }
 }

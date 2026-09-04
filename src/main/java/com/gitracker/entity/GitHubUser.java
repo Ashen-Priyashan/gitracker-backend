@@ -27,7 +27,7 @@ public class GitHubUser {
 
     private String avatarUrl;
 
-    @Column(length = 1000)
+    @Column(columnDefinition = "TEXT")
     private String bio;
 
     private Integer followers;

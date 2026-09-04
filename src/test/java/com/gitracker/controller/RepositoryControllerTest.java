@@ -57,4 +57,37 @@ class RepositoryControllerTest {
                 .andExpect(jsonPath("$[0].forks").value(20))
                 .andExpect(jsonPath("$[0].defaultBranch").value("main"));
     }
+
+    @Test
+    void shouldReturnRepositoryDetails() throws Exception {
+        RepositoryResponse repository = new RepositoryResponse(
+                "gitracker",
+                "GitHub analytics",
+                100,
+                20,
+                100,
+                "Java",
+                "main",
+                0,
+                "MIT License",
+                List.of("analytics"),
+                "https://github.com/octocat/gitracker",
+                1024,
+                false,
+                "2024-01-01T00:00:00Z",
+                "2024-01-02T00:00:00Z"
+        );
+
+        when(repositoryService.getRepository("octocat", "gitracker"))
+                .thenReturn(repository);
+
+        mockMvc.perform(get("/api/users/octocat/repositories/gitracker")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("gitracker"))
+                .andExpect(jsonPath("$.language").value("Java"))
+                .andExpect(jsonPath("$.stars").value(100))
+                .andExpect(jsonPath("$.forks").value(20))
+                .andExpect(jsonPath("$.defaultBranch").value("main"));
+    }
 }

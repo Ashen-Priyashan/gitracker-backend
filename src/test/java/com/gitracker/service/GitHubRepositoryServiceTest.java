@@ -119,6 +119,39 @@ class GitHubRepositoryServiceTest {
     }
 
     @Test
+    void shouldGetRepositoryDetailsAndSaveIfNew() {
+        GitHubRepositoryDto repositoryDto = createSampleDto();
+        GitHubUser owner = GitHubUser.builder().username("octocat").build();
+
+        when(gitHubApiClient.getRepository("octocat", "gitracker")).thenReturn(repositoryDto);
+        when(gitHubUserRepository.findByUsername("octocat")).thenReturn(Optional.of(owner));
+        when(repositoryRepository.findByOwner(owner)).thenReturn(List.of());
+
+        RepositoryResponse response = gitHubRepositoryService.getRepository("octocat", "gitracker");
+
+        assertNotNull(response);
+        assertEquals("gitracker", response.name());
+        verify(repositoryRepository).save(any(Repository.class));
+    }
+
+    @Test
+    void shouldGetRepositoryDetailsWithoutSavingIfAlreadyExists() {
+        GitHubRepositoryDto repositoryDto = createSampleDto();
+        GitHubUser owner = GitHubUser.builder().username("octocat").build();
+        Repository existing = Repository.builder().repoId(1L).owner(owner).build();
+
+        when(gitHubApiClient.getRepository("octocat", "gitracker")).thenReturn(repositoryDto);
+        when(gitHubUserRepository.findByUsername("octocat")).thenReturn(Optional.of(owner));
+        when(repositoryRepository.findByOwner(owner)).thenReturn(List.of(existing));
+
+        RepositoryResponse response = gitHubRepositoryService.getRepository("octocat", "gitracker");
+
+        assertNotNull(response);
+        assertEquals("gitracker", response.name());
+        verify(repositoryRepository, never()).save(any(Repository.class));
+    }
+
+    @Test
     void shouldReturnRepositoriesWhenOwnerDoesNotExist() {
 
         // Arrange

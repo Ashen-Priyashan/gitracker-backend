@@ -100,6 +100,62 @@ public class GitHubRepositoryService {
                 .toList();
     }
 
+    public RepositoryResponse getRepository(String username, String repoName) {
+        GitHubRepositoryDto repo = gitHubApiClient.getRepository(username, repoName);
+        if (repo == null) {
+            throw new com.gitracker.exception.ResourceNotFoundException(
+                    "Repository '" + repoName + "' not found for owner '" + username + "'"
+            );
+        }
+
+        GitHubUser owner = gitHubUserRepository.findByUsername(username).orElse(null);
+        String licenseName = repo.license() != null ? repo.license().name() : null;
+
+        if (owner != null) {
+            boolean exists = repositoryRepository.findByOwner(owner).stream()
+                    .anyMatch(r -> r.getRepoId().equals(repo.id()));
+            if (!exists) {
+                Repository repository = Repository.builder()
+                        .repoId(repo.id())
+                        .name(repo.name())
+                        .description(repo.description())
+                        .language(repo.language())
+                        .stars(repo.stars())
+                        .forks(repo.forks())
+                        .watchers(repo.watchers())
+                        .defaultBranch(repo.defaultBranch())
+                        .openIssues(repo.openIssues())
+                        .licenseName(licenseName)
+                        .topics(repo.topics() != null ? repo.topics() : List.of())
+                        .htmlUrl(repo.htmlUrl())
+                        .size(repo.size())
+                        .archived(repo.archived())
+                        .owner(owner)
+                        .build();
+
+                repositoryRepository.save(repository);
+            }
+        }
+
+        return new RepositoryResponse(
+                repo.name(),
+                repo.description(),
+                repo.stars(),
+                repo.forks(),
+                repo.watchers(),
+                repo.language(),
+                repo.defaultBranch() != null ? repo.defaultBranch() : "main",
+                repo.openIssues(),
+                licenseName,
+                repo.topics() != null ? repo.topics() : List.of(),
+                repo.htmlUrl(),
+                repo.size(),
+                repo.archived(),
+                repo.createdAt(),
+                repo.updatedAt()
+        );
+    }
+
     public ReadmeResponse getReadme(String username, String repoName) {
         GitHubReadmeDto readmeDto = gitHubApiClient.getReadme(username, repoName);
 

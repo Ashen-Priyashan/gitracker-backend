@@ -80,6 +80,19 @@ public class GitHubApiClient {
         }
     }
 
+    public GitHubRepositoryDto getRepository(String owner, String repo) {
+        try {
+            return restClient.get()
+                    .uri("/repos/{owner}/{repo}", owner, repo)
+                    .retrieve()
+                    .body(GitHubRepositoryDto.class);
+        } catch (HttpClientErrorException.NotFound exception) {
+            throw new ResourceNotFoundException("Repository '" + repo + "' not found for owner '" + owner + "'");
+        } catch (HttpClientErrorException.Forbidden exception) {
+            throw new RateLimitExceededException("GitHub API rate limit exceeded. Please try again later.");
+        }
+    }
+
     public GitHubReadmeDto getReadme(String username, String repoName) {
 
         try {

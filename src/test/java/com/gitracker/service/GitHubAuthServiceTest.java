@@ -57,6 +57,44 @@ class GitHubAuthServiceTest {
     }
 
     @Test
+    void shouldThrowExceptionWhenClientIdIsEmpty() {
+        GitHubAuthService emptyClientService = new GitHubAuthService(
+                "",
+                "secret",
+                "http://localhost:8080/api/github/callback",
+                "http://localhost:5173",
+                gitHubApiClient,
+                connectionRepository,
+                userRepository
+        );
+        MockHttpSession session = new MockHttpSession();
+
+        assertThrows(IllegalStateException.class, () -> emptyClientService.generateAuthorizationUrl(session));
+    }
+
+    @Test
+    void shouldReturnConnectedWhenUserHasDirectGithubUsername() {
+        MockHttpSession session = new MockHttpSession();
+        session.setAttribute(AuthService.SESSION_USER_ID_KEY, 1L);
+
+        com.gitracker.entity.UserEntity user = com.gitracker.entity.UserEntity.builder()
+                .id(1L)
+                .name("Test User")
+                .email("test@example.com")
+                .password("password")
+                .githubUsername("directuser")
+                .build();
+
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+
+        GitHubConnectionStatusResponse status = gitHubAuthService.getConnectionStatus(session);
+
+        assertTrue(status.connected());
+        assertEquals("directuser", status.username());
+        assertEquals("https://github.com/directuser.png", status.avatarUrl());
+    }
+
+    @Test
     void shouldReturnNotConnectedWhenNoUserInSession() {
         MockHttpSession session = new MockHttpSession();
 

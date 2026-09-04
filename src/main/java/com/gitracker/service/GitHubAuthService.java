@@ -61,6 +61,10 @@ public class GitHubAuthService {
     }
 
     public String generateAuthorizationUrl(HttpSession session) {
+        if (clientId == null || clientId.trim().isEmpty()) {
+            throw new IllegalStateException("GitHub App is not configured. Please set GITHUB_CLIENT_ID in your environment, or link your GitHub username directly.");
+        }
+
         String state = UUID.randomUUID().toString();
         session.setAttribute(STATE_SESSION_KEY, state);
 
@@ -146,15 +150,26 @@ public class GitHubAuthService {
         Long gitrackerUserId = (Long) session.getAttribute(AuthService.SESSION_USER_ID_KEY);
         if (gitrackerUserId != null) {
             Optional<UserEntity> userOpt = userRepository.findById(gitrackerUserId);
-            if (userOpt.isPresent() && userOpt.get().getGithubConnection() != null) {
-                GitHubAppConnection conn = userOpt.get().getGithubConnection();
-                return new GitHubConnectionStatusResponse(
-                        true,
-                        conn.getUsername(),
-                        conn.getAvatarUrl(),
-                        conn.getConnectedAt() != null ? conn.getConnectedAt().toString() : null,
-                        conn.getLastSyncedAt() != null ? conn.getLastSyncedAt().toString() : null
-                );
+            if (userOpt.isPresent()) {
+                UserEntity user = userOpt.get();
+                if (user.getGithubConnection() != null) {
+                    GitHubAppConnection conn = user.getGithubConnection();
+                    return new GitHubConnectionStatusResponse(
+                            true,
+                            conn.getUsername(),
+                            conn.getAvatarUrl(),
+                            conn.getConnectedAt() != null ? conn.getConnectedAt().toString() : null,
+                            conn.getLastSyncedAt() != null ? conn.getLastSyncedAt().toString() : null
+                    );
+                } else if (user.getGithubUsername() != null && !user.getGithubUsername().isBlank()) {
+                    return new GitHubConnectionStatusResponse(
+                            true,
+                            user.getGithubUsername(),
+                            "https://github.com/" + user.getGithubUsername() + ".png",
+                            user.getUpdatedAt() != null ? user.getUpdatedAt().toString() : null,
+                            user.getUpdatedAt() != null ? user.getUpdatedAt().toString() : null
+                    );
+                }
             }
         }
 

@@ -38,6 +38,17 @@ class GitHubAuthControllerTest {
     }
 
     @Test
+    void shouldReturnBadRequestWhenGitHubAppNotConfigured() throws Exception {
+        when(gitHubAuthService.generateAuthorizationUrl(any()))
+                .thenThrow(new IllegalStateException("GitHub App is not configured"));
+
+        mockMvc.perform(get("/api/github/authorize")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("GitHub App is not configured"));
+    }
+
+    @Test
     void shouldReturnConnectionStatusWhenNotConnected() throws Exception {
         GitHubConnectionStatusResponse statusResponse = new GitHubConnectionStatusResponse(false, null, null, null);
         when(gitHubAuthService.getConnectionStatus(any())).thenReturn(statusResponse);

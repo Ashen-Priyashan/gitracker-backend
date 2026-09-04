@@ -106,4 +106,28 @@ class AuthServiceTest {
 
         assertThrows(IllegalArgumentException.class, () -> authService.login(request, session));
     }
+
+    @Test
+    void shouldLinkGithubUsernameSuccessfully() {
+        MockHttpSession session = new MockHttpSession();
+        session.setAttribute(AuthService.SESSION_USER_ID_KEY, 1L);
+
+        UserEntity user = UserEntity.builder()
+                .id(1L)
+                .name("Ashen")
+                .email("ashen@example.com")
+                .password("$2a$10$hashedsecret")
+                .build();
+
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(userRepository.save(any(UserEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        UserAuthResponse response = authService.linkGithubUsername("octocat", session);
+
+        assertNotNull(response);
+        assertTrue(response.githubConnected());
+        assertEquals("octocat", response.githubUsername());
+        assertEquals("https://github.com/octocat.png", response.githubAvatarUrl());
+        assertEquals("octocat", session.getAttribute("CONNECTED_GITHUB_USERNAME"));
+    }
 }

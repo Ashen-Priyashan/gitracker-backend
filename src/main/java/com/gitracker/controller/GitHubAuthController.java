@@ -35,9 +35,13 @@ public class GitHubAuthController {
             description = "Generates the GitHub authorization URL for connecting a GitHub account."
     )
     @GetMapping("/authorize")
-    public ResponseEntity<Map<String, String>> authorize(HttpSession session) {
-        String authUrl = gitHubAuthService.generateAuthorizationUrl(session);
-        return ResponseEntity.ok(Map.of("url", authUrl));
+    public ResponseEntity<?> authorize(HttpSession session) {
+        try {
+            String authUrl = gitHubAuthService.generateAuthorizationUrl(session);
+            return ResponseEntity.ok(Map.of("url", authUrl));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        }
     }
 
     @Operation(

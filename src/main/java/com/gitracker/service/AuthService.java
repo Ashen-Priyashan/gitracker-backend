@@ -93,10 +93,47 @@ public class AuthService {
                 .orElse(null);
     }
 
+    @Transactional
+    public UserAuthResponse linkGithubUsername(String rawUsername, HttpSession session) {
+        Long userId = (Long) session.getAttribute(SESSION_USER_ID_KEY);
+        if (userId == null) {
+            throw new IllegalStateException("User is not authenticated");
+        }
+
+        if (rawUsername == null || rawUsername.isBlank()) {
+            throw new IllegalArgumentException("GitHub username cannot be empty");
+        }
+
+        String cleanedUsername = rawUsername.trim().replace("@", "");
+        UserEntity user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalStateException("User not found"));
+
+        user.setGithubUsername(cleanedUsername);
+        UserEntity savedUser = userRepository.save(user);
+
+        session.setAttribute("CONNECTED_GITHUB_USERNAME", cleanedUsername);
+
+        return mapToUserAuthResponse(savedUser);
+    }
+
     public UserAuthResponse mapToUserAuthResponse(UserEntity user) {
-        boolean connected = user.getGithubConnection() != null && user.getGithubConnection().getAccessToken() != null;
-        String githubUsername = connected ? user.getGithubConnection().getUsername() : null;
-        String githubAvatarUrl = connected ? user.getGithubConnection().getAvatarUrl() : null;
+        boolean hasConnection = user.getGithubConnection() != null && user.getGithubConnection().getAccessToken() != null;
+        boolean hasUsername = user.getGithubUsername() != null && !user.getGithubUsername().isBlank();
+        boolean connected = hasConnection || hasUsername;
+
+        String githubUsername = null;
+        if (hasUsername) {
+            githubUsername = user.getGithubUsername();
+        } else if (hasConnection) {
+            githubUsername = user.getGithubConnection().getUsername();
+        }
+
+        String githubAvatarUrl = null;
+        if (hasConnection && user.getGithubConnection().getAvatarUrl() != null) {
+            githubAvatarUrl = user.getGithubConnection().getAvatarUrl();
+        } else if (githubUsername != null) {
+            githubAvatarUrl = "https://github.com/" + githubUsername + ".png";
+        }
 
         return new UserAuthResponse(
                 user.getId(),

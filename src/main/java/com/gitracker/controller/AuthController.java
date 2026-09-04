@@ -90,4 +90,23 @@ public class AuthController {
                 "user", user
         ));
     }
+
+    @Operation(
+            summary = "Link GitHub username to account",
+            description = "Links a GitHub username directly to the authenticated Gitracker user."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "GitHub username linked successfully"),
+            @ApiResponse(responseCode = "400", description = "Invalid username or unauthenticated")
+    })
+    @PostMapping("/link-github")
+    public ResponseEntity<?> linkGithub(@RequestBody Map<String, String> request, HttpSession session) {
+        try {
+            String username = request.get("username");
+            UserAuthResponse response = authService.linkGithubUsername(username, session);
+            return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        }
+    }
 }

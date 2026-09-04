@@ -60,6 +60,34 @@ public class RepositoryController {
     }
 
     @Operation(
+            summary = "Get repository details",
+            description = "Retrieves details for a specific repository belonging to a GitHub user."
+    )
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Repository details retrieved successfully"
+            ),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "Repository or user not found"
+            ),
+            @ApiResponse(
+                    responseCode = "429",
+                    description = "GitHub API rate limit exceeded"
+            )
+    })
+    @GetMapping("/{username}/repositories/{repoName}")
+    public RepositoryResponse getRepository(
+            @Parameter(description = "GitHub username", example = "octocat")
+            @PathVariable String username,
+            @Parameter(description = "Repository name", example = "Hello-World")
+            @PathVariable String repoName
+    ) {
+        return repositoryService.getRepository(username, repoName);
+    }
+
+    @Operation(
             summary = "Get repository README",
             description = "Retrieves the README file content for a specific GitHub repository."
     )

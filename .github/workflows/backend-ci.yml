@@ -5,7 +5,12 @@ on:
     branches:
       - develop
       - main
-      - feature/**
+      - "feat/**"
+      - "feature/**"
+      - "fix/**"
+      - "chore/**"
+      - "test/**"
+
   pull_request:
     branches:
       - develop
@@ -35,6 +40,9 @@ jobs:
         ports:
           - 6379:6379
 
+    env:
+      MAVEN_OPTS: "-Xms128m -Xmx512m"
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -49,5 +57,8 @@ jobs:
       - name: Make Maven Wrapper executable
         run: chmod +x mvnw
 
-      - name: Build and run tests
-        run: ./mvnw clean test
+      - name: Run test suite
+        run: ./mvnw clean test -DargLine="-Xmx384m"
+
+      - name: Verify production package build
+        run: ./mvnw package -DskipTests

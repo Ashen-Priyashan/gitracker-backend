@@ -68,6 +68,8 @@ public class SecurityConfig {
                                 "/api/auth/signup",
                                 "/api/auth/me",
                                 "/api/health",
+                                "/actuator/health/**",
+                                "/actuator/info",
                                 "/api/github/callback",
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",

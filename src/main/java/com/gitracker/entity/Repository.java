@@ -23,7 +23,7 @@ public class Repository {
 
     private String name;
 
-    @Column(length = 1000)
+    @Column(columnDefinition = "TEXT")
     private String description;
 
     private String language;

@@ -28,6 +28,7 @@ public class GitHubAppConnection {
 
     private String avatarUrl;
 
+    @Convert(converter = com.gitracker.util.TokenEncryptionConverter.class)
     @Column(length = 2048)
     private String accessToken;
 

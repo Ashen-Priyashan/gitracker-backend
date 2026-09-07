@@ -1,10 +1,7 @@
 package com.gitracker.service;
 
 import com.gitracker.client.GitHubApiClient;
-import com.gitracker.dto.GitHubReadmeDto;
-import com.gitracker.dto.GitHubRepositoryDto;
-import com.gitracker.dto.ReadmeResponse;
-import com.gitracker.dto.RepositoryResponse;
+import com.gitracker.dto.*;
 import com.gitracker.entity.GitHubUser;
 import com.gitracker.entity.Repository;
 import com.gitracker.repository.GitHubUserRepository;
@@ -180,5 +177,207 @@ public class GitHubRepositoryService {
         } catch (IllegalArgumentException e) {
             return new ReadmeResponse(readmeDto.content(), readmeDto.htmlUrl(), true);
         }
+    }
+
+    public List<BranchResponse> getBranches(String username, String repoName) {
+        GitHubBranchDto[] branches = gitHubApiClient.getBranches(username, repoName);
+        if (branches == null) {
+            return List.of();
+        }
+
+        return Arrays.stream(branches)
+                .map(b -> new BranchResponse(
+                        b.name(),
+                        b.isProtected(),
+                        b.commit() != null ? b.commit().sha() : null
+                ))
+                .toList();
+    }
+
+    public List<CommitSummaryResponse> getCommits(String username, String repoName, String branch, int page, int perPage) {
+        GitHubCommitListDto[] commits = gitHubApiClient.getCommits(username, repoName, branch, page, perPage);
+        if (commits == null) {
+            return List.of();
+        }
+
+        return Arrays.stream(commits)
+                .map(this::mapToCommitSummary)
+                .toList();
+    }
+
+    public CommitDetailResponse getCommit(String username, String repoName, String sha) {
+        GitHubCommitDetailDto commit = gitHubApiClient.getCommit(username, repoName, sha);
+        if (commit == null) {
+            throw new com.gitracker.exception.ResourceNotFoundException(
+                    "Commit '" + sha + "' not found in repository '" + repoName + "' for owner '" + username + "'"
+            );
+        }
+
+        return mapToCommitDetail(username, repoName, commit);
+    }
+
+    private CommitSummaryResponse mapToCommitSummary(GitHubCommitListDto dto) {
+        String sha = dto.sha();
+        String shortSha = sha != null && sha.length() >= 7 ? sha.substring(0, 7) : sha;
+        String message = dto.commit() != null ? dto.commit().message() : null;
+
+        String authorName = resolveAuthorName(dto);
+        String authorLogin = dto.author() != null ? dto.author().login() : null;
+        String authorAvatarUrl = dto.author() != null ? dto.author().avatarUrl() : null;
+        String authorHtmlUrl = dto.author() != null && dto.author().login() != null
+                ? "https://github.com/" + dto.author().login()
+                : (dto.htmlUrl() != null ? dto.htmlUrl() : null);
+
+        String committerName = resolveCommitterName(dto);
+        String committerLogin = dto.committer() != null ? dto.committer().login() : null;
+        String committerAvatarUrl = dto.committer() != null ? dto.committer().avatarUrl() : null;
+        String committerHtmlUrl = dto.committer() != null && dto.committer().login() != null
+                ? "https://github.com/" + dto.committer().login()
+                : null;
+
+        String authoredAt = dto.commit() != null && dto.commit().author() != null
+                ? dto.commit().author().date()
+                : null;
+        String committedAt = dto.commit() != null && dto.commit().committer() != null
+                ? dto.commit().committer().date()
+                : null;
+
+        return new CommitSummaryResponse(
+                sha,
+                shortSha,
+                message,
+                authorName,
+                authorLogin,
+                authorAvatarUrl,
+                authorHtmlUrl,
+                committerName,
+                committerLogin,
+                committerAvatarUrl,
+                committerHtmlUrl,
+                authoredAt,
+                committedAt,
+                dto.htmlUrl()
+        );
+    }
+
+    private CommitDetailResponse mapToCommitDetail(String username, String repoName, GitHubCommitDetailDto dto) {
+        String sha = dto.sha();
+        String shortSha = sha != null && sha.length() >= 7 ? sha.substring(0, 7) : sha;
+        String message = dto.commit() != null ? dto.commit().message() : null;
+
+        String authorName = resolveDetailAuthorName(dto);
+        String authorLogin = dto.author() != null ? dto.author().login() : null;
+        String authorAvatarUrl = dto.author() != null ? dto.author().avatarUrl() : null;
+        String authorHtmlUrl = dto.author() != null && dto.author().login() != null
+                ? "https://github.com/" + dto.author().login()
+                : (dto.htmlUrl() != null ? dto.htmlUrl() : null);
+
+        String committerName = resolveDetailCommitterName(dto);
+        String committerLogin = dto.committer() != null ? dto.committer().login() : null;
+        String committerAvatarUrl = dto.committer() != null ? dto.committer().avatarUrl() : null;
+        String committerHtmlUrl = dto.committer() != null && dto.committer().login() != null
+                ? "https://github.com/" + dto.committer().login()
+                : null;
+
+        String authoredAt = dto.commit() != null && dto.commit().author() != null
+                ? dto.commit().author().date()
+                : null;
+        String committedAt = dto.commit() != null && dto.commit().committer() != null
+                ? dto.commit().committer().date()
+                : null;
+
+        int additions = dto.stats() != null ? dto.stats().additions() : 0;
+        int deletions = dto.stats() != null ? dto.stats().deletions() : 0;
+        int totalChanges = dto.stats() != null ? dto.stats().total() : 0;
+
+        List<CommitParentResponse> parents = dto.parents() != null
+                ? dto.parents().stream()
+                .map(p -> new CommitParentResponse(
+                        p.sha(),
+                        p.htmlUrl() != null ? p.htmlUrl() : (p.sha() != null ? "https://github.com/" + username + "/" + repoName + "/commit/" + p.sha() : null)
+                ))
+                .toList()
+                : List.of();
+
+        List<CommitFileResponse> files = dto.files() != null
+                ? dto.files().stream()
+                .map(f -> new CommitFileResponse(
+                        f.filename(),
+                        f.status(),
+                        f.additions(),
+                        f.deletions(),
+                        f.changes(),
+                        f.blobUrl(),
+                        f.rawUrl(),
+                        f.patch(),
+                        f.previousFilename()
+                ))
+                .toList()
+                : List.of();
+
+        int changedFilesCount = files.size();
+
+        return new CommitDetailResponse(
+                sha,
+                shortSha,
+                message,
+                authorName,
+                authorLogin,
+                authorAvatarUrl,
+                authorHtmlUrl,
+                committerName,
+                committerLogin,
+                committerAvatarUrl,
+                committerHtmlUrl,
+                authoredAt,
+                committedAt,
+                dto.htmlUrl(),
+                additions,
+                deletions,
+                totalChanges,
+                changedFilesCount,
+                parents,
+                files
+        );
+    }
+
+    private String resolveAuthorName(GitHubCommitListDto dto) {
+        if (dto.commit() != null && dto.commit().author() != null && dto.commit().author().name() != null && !dto.commit().author().name().isBlank()) {
+            return dto.commit().author().name();
+        }
+        if (dto.author() != null && dto.author().login() != null) {
+            return dto.author().login();
+        }
+        return "Unknown";
+    }
+
+    private String resolveCommitterName(GitHubCommitListDto dto) {
+        if (dto.commit() != null && dto.commit().committer() != null && dto.commit().committer().name() != null && !dto.commit().committer().name().isBlank()) {
+            return dto.commit().committer().name();
+        }
+        if (dto.committer() != null && dto.committer().login() != null) {
+            return dto.committer().login();
+        }
+        return null;
+    }
+
+    private String resolveDetailAuthorName(GitHubCommitDetailDto dto) {
+        if (dto.commit() != null && dto.commit().author() != null && dto.commit().author().name() != null && !dto.commit().author().name().isBlank()) {
+            return dto.commit().author().name();
+        }
+        if (dto.author() != null && dto.author().login() != null) {
+            return dto.author().login();
+        }
+        return "Unknown";
+    }
+
+    private String resolveDetailCommitterName(GitHubCommitDetailDto dto) {
+        if (dto.commit() != null && dto.commit().committer() != null && dto.commit().committer().name() != null && !dto.commit().committer().name().isBlank()) {
+            return dto.commit().committer().name();
+        }
+        if (dto.committer() != null && dto.committer().login() != null) {
+            return dto.committer().login();
+        }
+        return null;
     }
 }

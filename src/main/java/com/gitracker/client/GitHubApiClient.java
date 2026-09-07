@@ -1,5 +1,8 @@
 package com.gitracker.client;
 
+import com.gitracker.dto.GitHubBranchDto;
+import com.gitracker.dto.GitHubCommitDetailDto;
+import com.gitracker.dto.GitHubCommitListDto;
 import com.gitracker.dto.GitHubReadmeDto;
 import com.gitracker.dto.GitHubRepositoryDto;
 import com.gitracker.dto.GitHubUserDto;
@@ -209,6 +212,100 @@ public class GitHubApiClient {
         }
 
         return allRepositories.toArray(new GitHubRepositoryDto[0]);
+    }
+
+    public GitHubBranchDto[] getBranches(String owner, String repo) {
+        List<GitHubBranchDto> allBranches = new ArrayList<>();
+        int page = 1;
+
+        while (page <= MAX_PAGES) {
+            try {
+                GitHubBranchDto[] batch = restClient.get()
+                        .uri("/repos/{owner}/{repo}/branches?per_page={perPage}&page={page}", owner, repo, PER_PAGE, page)
+                        .retrieve()
+                        .body(GitHubBranchDto[].class);
+
+                if (batch == null || batch.length == 0) {
+                    break;
+                }
+
+                allBranches.addAll(List.of(batch));
+
+                if (batch.length < PER_PAGE) {
+                    break;
+                }
+
+                page++;
+            } catch (HttpClientErrorException.NotFound exception) {
+                if (page == 1) {
+                    throw new ResourceNotFoundException(
+                            "Repository '" + repo + "' not found for owner '" + owner + "'"
+                    );
+                }
+                break;
+            } catch (HttpClientErrorException.Forbidden exception) {
+                throw new RateLimitExceededException(
+                        "GitHub API rate limit exceeded. Please try again later."
+                );
+            }
+        }
+
+        return allBranches.toArray(new GitHubBranchDto[0]);
+    }
+
+    public GitHubCommitListDto[] getCommits(String owner, String repo, String branch, int page, int perPage) {
+        int safePage = Math.max(1, page);
+        int safePerPage = perPage > 0 ? Math.min(100, perPage) : 20;
+
+        try {
+            String uri;
+            Object[] uriParams;
+            if (branch != null && !branch.isBlank()) {
+                uri = "/repos/{owner}/{repo}/commits?sha={branch}&page={page}&per_page={perPage}";
+                uriParams = new Object[]{owner, repo, branch, safePage, safePerPage};
+            } else {
+                uri = "/repos/{owner}/{repo}/commits?page={page}&per_page={perPage}";
+                uriParams = new Object[]{owner, repo, safePage, safePerPage};
+            }
+
+            GitHubCommitListDto[] commits = restClient.get()
+                    .uri(uri, uriParams)
+                    .retrieve()
+                    .body(GitHubCommitListDto[].class);
+
+            return commits != null ? commits : new GitHubCommitListDto[0];
+        } catch (HttpClientErrorException.NotFound exception) {
+            if (safePage == 1) {
+                throw new ResourceNotFoundException(
+                        "Repository '" + repo + "' or branch '" + (branch != null ? branch : "") + "' not found for owner '" + owner + "'"
+                );
+            }
+            return new GitHubCommitListDto[0];
+        } catch (HttpClientErrorException.Conflict exception) {
+            // Empty git repository returns 409 Conflict
+            return new GitHubCommitListDto[0];
+        } catch (HttpClientErrorException.Forbidden exception) {
+            throw new RateLimitExceededException(
+                    "GitHub API rate limit exceeded. Please try again later."
+            );
+        }
+    }
+
+    public GitHubCommitDetailDto getCommit(String owner, String repo, String sha) {
+        try {
+            return restClient.get()
+                    .uri("/repos/{owner}/{repo}/commits/{sha}", owner, repo, sha)
+                    .retrieve()
+                    .body(GitHubCommitDetailDto.class);
+        } catch (HttpClientErrorException.NotFound exception) {
+            throw new ResourceNotFoundException(
+                    "Commit '" + sha + "' not found in repository '" + repo + "' for owner '" + owner + "'"
+            );
+        } catch (HttpClientErrorException.Forbidden exception) {
+            throw new RateLimitExceededException(
+                    "GitHub API rate limit exceeded. Please try again later."
+            );
+        }
     }
 
     @SuppressWarnings("rawtypes")

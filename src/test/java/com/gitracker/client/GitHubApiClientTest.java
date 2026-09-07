@@ -1,6 +1,10 @@
 package com.gitracker.client;
 
+import com.gitracker.dto.GitHubBranchDto;
+import com.gitracker.dto.GitHubCommitDetailDto;
+import com.gitracker.dto.GitHubCommitListDto;
 import com.gitracker.dto.GitHubRepositoryDto;
+import com.gitracker.exception.RateLimitExceededException;
 import com.gitracker.exception.ResourceNotFoundException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -101,6 +105,151 @@ class GitHubApiClientTest {
                 .andRespond(withStatus(HttpStatus.NOT_FOUND));
 
         assertThrows(ResourceNotFoundException.class, () -> gitHubApiClient.getRepositories("unknown"));
+        server.verify();
+    }
+
+    @Test
+    void shouldFetchBranchesSuccessfully() {
+        String json = """
+                [
+                    {
+                        "name": "main",
+                        "protected": false,
+                        "commit": {
+                            "sha": "c5b97d5ae6c19d5c5df71a34c7fbeeda2479ccbc",
+                            "url": "https://api.github.com/repos/octocat/Hello-World/commits/c5b97d5ae6c19d5c5df71a34c7fbeeda2479ccbc"
+                        }
+                    },
+                    {
+                        "name": "develop",
+                        "protected": true,
+                        "commit": {
+                            "sha": "91bc72a6c19d5c5df71a34c7fbeeda2479ccbc11",
+                            "url": "https://api.github.com/repos/octocat/Hello-World/commits/91bc72a6c19d5c5df71a34c7fbeeda2479ccbc11"
+                        }
+                    }
+                ]""";
+
+        server.expect(requestTo("https://api.github.com/repos/octocat/Hello-World/branches?per_page=100&page=1"))
+                .andRespond(withSuccess(json, MediaType.APPLICATION_JSON));
+
+        GitHubBranchDto[] branches = gitHubApiClient.getBranches("octocat", "Hello-World");
+
+        assertNotNull(branches);
+        assertEquals(2, branches.length);
+        assertEquals("main", branches[0].name());
+        assertFalse(branches[0].isProtected());
+        assertEquals("c5b97d5ae6c19d5c5df71a34c7fbeeda2479ccbc", branches[0].commit().sha());
+        assertEquals("develop", branches[1].name());
+        assertTrue(branches[1].isProtected());
+        server.verify();
+    }
+
+    @Test
+    void shouldThrowResourceNotFoundWhenFetchingBranchesForNonExistentRepo() {
+        server.expect(requestTo("https://api.github.com/repos/octocat/unknown-repo/branches?per_page=100&page=1"))
+                .andRespond(withStatus(HttpStatus.NOT_FOUND));
+
+        assertThrows(ResourceNotFoundException.class, () -> gitHubApiClient.getBranches("octocat", "unknown-repo"));
+        server.verify();
+    }
+
+    @Test
+    void shouldThrowRateLimitExceededWhenFetchingBranchesRateLimited() {
+        server.expect(requestTo("https://api.github.com/repos/octocat/Hello-World/branches?per_page=100&page=1"))
+                .andRespond(withStatus(HttpStatus.FORBIDDEN));
+
+        assertThrows(RateLimitExceededException.class, () -> gitHubApiClient.getBranches("octocat", "Hello-World"));
+        server.verify();
+    }
+
+    @Test
+    void shouldFetchCommitsForBranchWithPagination() {
+        String json = """
+                [
+                    {
+                        "sha": "6dcb09b5b57875f334f61aebed695e2e4193db5e",
+                        "commit": {
+                            "author": { "name": "Monalisa Octocat", "email": "octocat@github.com", "date": "2026-09-01T12:00:00Z" },
+                            "committer": { "name": "Monalisa Octocat", "email": "octocat@github.com", "date": "2026-09-01T12:00:00Z" },
+                            "message": "Fix authentication bug"
+                        },
+                        "html_url": "https://github.com/octocat/Hello-World/commit/6dcb09b5b57875f334f61aebed695e2e4193db5e",
+                        "author": {
+                            "login": "octocat",
+                            "avatar_url": "https://avatars.githubusercontent.com/u/583231"
+                        }
+                    }
+                ]""";
+
+        server.expect(requestTo("https://api.github.com/repos/octocat/Hello-World/commits?sha=develop&page=1&per_page=20"))
+                .andRespond(withSuccess(json, MediaType.APPLICATION_JSON));
+
+        GitHubCommitListDto[] commits = gitHubApiClient.getCommits("octocat", "Hello-World", "develop", 1, 20);
+
+        assertNotNull(commits);
+        assertEquals(1, commits.length);
+        assertEquals("6dcb09b5b57875f334f61aebed695e2e4193db5e", commits[0].sha());
+        assertEquals("Fix authentication bug", commits[0].commit().message());
+        assertEquals("octocat", commits[0].author().login());
+        server.verify();
+    }
+
+    @Test
+    void shouldHandleEmptyRepositoryConflictOnCommits() {
+        server.expect(requestTo("https://api.github.com/repos/octocat/empty-repo/commits?sha=main&page=1&per_page=20"))
+                .andRespond(withStatus(HttpStatus.CONFLICT));
+
+        GitHubCommitListDto[] commits = gitHubApiClient.getCommits("octocat", "empty-repo", "main", 1, 20);
+
+        assertNotNull(commits);
+        assertEquals(0, commits.length);
+        server.verify();
+    }
+
+    @Test
+    void shouldFetchCommitDetailSuccessfully() {
+        String json = """
+                {
+                    "sha": "6dcb09b5b57875f334f61aebed695e2e4193db5e",
+                    "commit": {
+                        "author": { "name": "Monalisa Octocat", "email": "octocat@github.com", "date": "2026-09-01T12:00:00Z" },
+                        "committer": { "name": "GitHub", "email": "noreply@github.com", "date": "2026-09-01T12:00:00Z" },
+                        "message": "Fix authentication bug\\n\\nDetailed explanation."
+                    },
+                    "html_url": "https://github.com/octocat/Hello-World/commit/6dcb09b5b57875f334f61aebed695e2e4193db5e",
+                    "author": { "login": "octocat", "avatar_url": "https://avatars.githubusercontent.com/u/583231" },
+                    "committer": null,
+                    "stats": { "total": 12, "additions": 10, "deletions": 2 },
+                    "parents": [
+                        { "sha": "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b", "html_url": "https://github.com/octocat/Hello-World/commit/1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b" }
+                    ],
+                    "files": [
+                        {
+                            "filename": "src/Auth.java",
+                            "status": "modified",
+                            "additions": 10,
+                            "deletions": 2,
+                            "changes": 12,
+                            "patch": "@@ -1,3 +1,11 @@\\n+new line"
+                        }
+                    ]
+                }""";
+
+        server.expect(requestTo("https://api.github.com/repos/octocat/Hello-World/commits/6dcb09b5b57875f334f61aebed695e2e4193db5e"))
+                .andRespond(withSuccess(json, MediaType.APPLICATION_JSON));
+
+        GitHubCommitDetailDto detail = gitHubApiClient.getCommit("octocat", "Hello-World", "6dcb09b5b57875f334f61aebed695e2e4193db5e");
+
+        assertNotNull(detail);
+        assertEquals("6dcb09b5b57875f334f61aebed695e2e4193db5e", detail.sha());
+        assertEquals(12, detail.stats().total());
+        assertEquals(10, detail.stats().additions());
+        assertEquals(2, detail.stats().deletions());
+        assertEquals(1, detail.files().size());
+        assertEquals("src/Auth.java", detail.files().get(0).filename());
+        assertEquals("modified", detail.files().get(0).status());
+        assertEquals(1, detail.parents().size());
         server.verify();
     }
 }

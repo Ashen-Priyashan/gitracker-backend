@@ -197,4 +197,74 @@ class RepositoryControllerTest {
                 .andExpect(jsonPath("$.files[0].status").value("modified"))
                 .andExpect(jsonPath("$.files[0].patch").value("@@ -1,4 +1,12 @@"));
     }
+
+    @Test
+    void shouldReturnContributors() throws Exception {
+        ContributorResponse contributor = new ContributorResponse(
+                "octocat",
+                "https://avatar.url/octocat",
+                "https://github.com/octocat",
+                42,
+                "User"
+        );
+
+        when(repositoryService.getContributors("octocat", "gitracker"))
+                .thenReturn(List.of(contributor));
+
+        mockMvc.perform(get("/api/users/octocat/repositories/gitracker/contributors")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].login").value("octocat"))
+                .andExpect(jsonPath("$[0].contributions").value(42))
+                .andExpect(jsonPath("$[0].avatarUrl").value("https://avatar.url/octocat"));
+    }
+
+    @Test
+    void shouldReturnCommitActivity() throws Exception {
+        CommitActivityWeekResponse week = new CommitActivityWeekResponse(1640000000L, 5, List.of(1, 0, 2, 0, 1, 1, 0));
+        CommitActivityResponse response = new CommitActivityResponse("READY", 5, List.of(week));
+
+        when(repositoryService.getCommitActivity("octocat", "gitracker"))
+                .thenReturn(response);
+
+        mockMvc.perform(get("/api/users/octocat/repositories/gitracker/stats/commit-activity")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("READY"))
+                .andExpect(jsonPath("$.totalYearCommits").value(5))
+                .andExpect(jsonPath("$.weeks[0].weekTimestamp").value(1640000000))
+                .andExpect(jsonPath("$.weeks[0].totalCommits").value(5));
+    }
+
+    @Test
+    void shouldReturnCodeFrequency() throws Exception {
+        CodeFrequencyWeekResponse week = new CodeFrequencyWeekResponse(1640000000L, 100, -20, 80);
+        CodeFrequencyResponse response = new CodeFrequencyResponse("READY", List.of(week));
+
+        when(repositoryService.getCodeFrequency("octocat", "gitracker"))
+                .thenReturn(response);
+
+        mockMvc.perform(get("/api/users/octocat/repositories/gitracker/stats/code-frequency")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("READY"))
+                .andExpect(jsonPath("$.weeklyStats[0].additions").value(100))
+                .andExpect(jsonPath("$.weeklyStats[0].deletions").value(-20))
+                .andExpect(jsonPath("$.weeklyStats[0].netChange").value(80));
+    }
+
+    @Test
+    void shouldReturnParticipation() throws Exception {
+        ParticipationResponse response = new ParticipationResponse("READY", List.of(10, 20), List.of(5, 10));
+
+        when(repositoryService.getParticipation("octocat", "gitracker"))
+                .thenReturn(response);
+
+        mockMvc.perform(get("/api/users/octocat/repositories/gitracker/stats/participation")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("READY"))
+                .andExpect(jsonPath("$.allCommits[0]").value(10))
+                .andExpect(jsonPath("$.ownerCommits[0]").value(5));
+    }
 }

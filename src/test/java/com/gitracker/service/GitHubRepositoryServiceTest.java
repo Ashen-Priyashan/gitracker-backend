@@ -297,4 +297,122 @@ class GitHubRepositoryServiceTest {
         assertEquals("modified", response.files().get(0).status());
         assertEquals("@@ -1,5 +1,15 @@", response.files().get(0).patch());
     }
+
+    @Test
+    void shouldReturnContributors() {
+        GitHubContributorDto contributorDto = new GitHubContributorDto(
+                "octocat",
+                "https://avatars.githubusercontent.com/u/583231",
+                "https://github.com/octocat",
+                30,
+                "User"
+        );
+
+        when(gitHubApiClient.getContributors("octocat", "gitracker"))
+                .thenReturn(new GitHubContributorDto[]{contributorDto});
+
+        List<ContributorResponse> contributors = gitHubRepositoryService.getContributors("octocat", "gitracker");
+
+        assertNotNull(contributors);
+        assertEquals(1, contributors.size());
+        assertEquals("octocat", contributors.get(0).login());
+        assertEquals(30, contributors.get(0).contributions());
+        assertEquals("https://avatars.githubusercontent.com/u/583231", contributors.get(0).avatarUrl());
+    }
+
+    @Test
+    void shouldReturnCommitActivityWhenReady() {
+        GitHubCommitActivityDto activityDto = new GitHubCommitActivityDto(
+                1640000000L,
+                10,
+                List.of(1, 2, 3, 0, 4, 0, 0)
+        );
+
+        when(gitHubApiClient.getCommitActivity("octocat", "gitracker"))
+                .thenReturn(new GitHubCommitActivityDto[]{activityDto});
+
+        CommitActivityResponse response = gitHubRepositoryService.getCommitActivity("octocat", "gitracker");
+
+        assertNotNull(response);
+        assertEquals("READY", response.status());
+        assertEquals(10, response.totalYearCommits());
+        assertEquals(1, response.weeks().size());
+        assertEquals(1640000000L, response.weeks().get(0).weekTimestamp());
+        assertEquals(10, response.weeks().get(0).totalCommits());
+    }
+
+    @Test
+    void shouldReturnCalculatingStatusWhenCommitActivityIsNull() {
+        when(gitHubApiClient.getCommitActivity("octocat", "gitracker"))
+                .thenReturn(null);
+
+        CommitActivityResponse response = gitHubRepositoryService.getCommitActivity("octocat", "gitracker");
+
+        assertNotNull(response);
+        assertEquals("CALCULATING", response.status());
+        assertEquals(0, response.totalYearCommits());
+        assertTrue(response.weeks().isEmpty());
+    }
+
+    @Test
+    void shouldReturnCodeFrequencyWhenReady() {
+        Number[][] raw = new Number[][]{
+                new Number[]{1640000000L, 500, -120},
+                new Number[]{1640604800L, 300, -50}
+        };
+
+        when(gitHubApiClient.getCodeFrequency("octocat", "gitracker"))
+                .thenReturn(raw);
+
+        CodeFrequencyResponse response = gitHubRepositoryService.getCodeFrequency("octocat", "gitracker");
+
+        assertNotNull(response);
+        assertEquals("READY", response.status());
+        assertEquals(2, response.weeklyStats().size());
+        assertEquals(500, response.weeklyStats().get(0).additions());
+        assertEquals(-120, response.weeklyStats().get(0).deletions());
+        assertEquals(380, response.weeklyStats().get(0).netChange());
+    }
+
+    @Test
+    void shouldReturnCalculatingWhenCodeFrequencyIsNull() {
+        when(gitHubApiClient.getCodeFrequency("octocat", "gitracker"))
+                .thenReturn(null);
+
+        CodeFrequencyResponse response = gitHubRepositoryService.getCodeFrequency("octocat", "gitracker");
+
+        assertNotNull(response);
+        assertEquals("CALCULATING", response.status());
+        assertTrue(response.weeklyStats().isEmpty());
+    }
+
+    @Test
+    void shouldReturnParticipationWhenReady() {
+        GitHubParticipationDto dto = new GitHubParticipationDto(
+                List.of(5, 10, 15),
+                List.of(2, 5, 8)
+        );
+
+        when(gitHubApiClient.getParticipation("octocat", "gitracker"))
+                .thenReturn(dto);
+
+        ParticipationResponse response = gitHubRepositoryService.getParticipation("octocat", "gitracker");
+
+        assertNotNull(response);
+        assertEquals("READY", response.status());
+        assertEquals(List.of(5, 10, 15), response.allCommits());
+        assertEquals(List.of(2, 5, 8), response.ownerCommits());
+    }
+
+    @Test
+    void shouldReturnCalculatingWhenParticipationIsNull() {
+        when(gitHubApiClient.getParticipation("octocat", "gitracker"))
+                .thenReturn(null);
+
+        ParticipationResponse response = gitHubRepositoryService.getParticipation("octocat", "gitracker");
+
+        assertNotNull(response);
+        assertEquals("CALCULATING", response.status());
+        assertTrue(response.allCommits().isEmpty());
+    }
 }

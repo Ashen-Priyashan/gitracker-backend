@@ -9,4 +9,6 @@ public interface GitHubUserRepository
         extends JpaRepository<GitHubUser, Long> {
 
     Optional<GitHubUser> findByUsername(String username);
+
+    Optional<GitHubUser> findByUsernameIgnoreCase(String username);
 }

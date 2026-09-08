@@ -310,6 +310,28 @@ class GitHubApiClientTest {
     }
 
     @Test
+    void shouldReturnNullWhenCommitActivityReturnsEmptyObjectOn202() {
+        server.expect(requestTo("https://api.github.com/repos/octocat/Hello-World/stats/commit_activity"))
+                .andRespond(withStatus(HttpStatus.ACCEPTED).body("{}").contentType(MediaType.APPLICATION_JSON));
+
+        GitHubCommitActivityDto[] activity = gitHubApiClient.getCommitActivity("octocat", "Hello-World");
+
+        assertNull(activity);
+        server.verify();
+    }
+
+    @Test
+    void shouldReturnNullWhenCommitActivityReturnsEmptyObjectOn200() {
+        server.expect(requestTo("https://api.github.com/repos/octocat/Hello-World/stats/commit_activity"))
+                .andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
+
+        GitHubCommitActivityDto[] activity = gitHubApiClient.getCommitActivity("octocat", "Hello-World");
+
+        assertNull(activity);
+        server.verify();
+    }
+
+    @Test
     void shouldFetchCodeFrequencySuccessfully() {
         String json = """
                 [
@@ -330,6 +352,17 @@ class GitHubApiClientTest {
     }
 
     @Test
+    void shouldReturnNullWhenCodeFrequencyReturnsEmptyObject() {
+        server.expect(requestTo("https://api.github.com/repos/octocat/Hello-World/stats/code_frequency"))
+                .andRespond(withStatus(HttpStatus.ACCEPTED).body("{}").contentType(MediaType.APPLICATION_JSON));
+
+        Number[][] stats = gitHubApiClient.getCodeFrequency("octocat", "Hello-World");
+
+        assertNull(stats);
+        server.verify();
+    }
+
+    @Test
     void shouldFetchParticipationSuccessfully() {
         String json = """
                 {
@@ -345,6 +378,17 @@ class GitHubApiClientTest {
         assertNotNull(participation);
         assertEquals(3, participation.all().size());
         assertEquals(3, participation.owner().size());
+        server.verify();
+    }
+
+    @Test
+    void shouldReturnNullWhenParticipationReturnsEmptyObject() {
+        server.expect(requestTo("https://api.github.com/repos/octocat/Hello-World/stats/participation"))
+                .andRespond(withStatus(HttpStatus.ACCEPTED).body("{}").contentType(MediaType.APPLICATION_JSON));
+
+        GitHubParticipationDto participation = gitHubApiClient.getParticipation("octocat", "Hello-World");
+
+        assertNull(participation);
         server.verify();
     }
 }

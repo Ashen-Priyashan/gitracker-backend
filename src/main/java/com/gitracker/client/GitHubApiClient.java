@@ -3,6 +3,7 @@ package com.gitracker.client;
 import com.gitracker.dto.*;
 import com.gitracker.exception.RateLimitExceededException;
 import com.gitracker.exception.ResourceNotFoundException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
@@ -22,6 +23,7 @@ import java.util.Map;
 public class GitHubApiClient {
 
     private final RestClient restClient;
+    private final ObjectMapper objectMapper;
 
     @Autowired
     public GitHubApiClient(
@@ -32,7 +34,9 @@ public class GitHubApiClient {
             @Value("${github.api.connect-timeout-seconds:5}")
             int connectTimeoutSeconds,
             @Value("${github.api.read-timeout-seconds:10}")
-            int readTimeoutSeconds
+            int readTimeoutSeconds,
+            @Autowired(required = false)
+            ObjectMapper objectMapper
     ) {
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(Duration.ofSeconds(connectTimeoutSeconds));
@@ -50,17 +54,19 @@ public class GitHubApiClient {
         }
 
         this.restClient = builder.build();
+        this.objectMapper = objectMapper != null ? objectMapper : new ObjectMapper();
     }
 
     GitHubApiClient(RestClient restClient) {
         this.restClient = restClient;
+        this.objectMapper = new ObjectMapper();
     }
 
     public GitHubApiClient(
             String baseUrl,
             String token
     ) {
-        this(baseUrl, token, 5, 10);
+        this(baseUrl, token, 5, 10, new ObjectMapper());
     }
 
     public GitHubUserDto getUser(String username) {
@@ -362,12 +368,21 @@ public class GitHubApiClient {
 
     public GitHubContributorDto[] getContributors(String owner, String repo) {
         try {
-            GitHubContributorDto[] contributors = restClient.get()
+            ResponseEntity<String> response = restClient.get()
                     .uri("/repos/{owner}/{repo}/contributors?per_page=100", owner, repo)
                     .retrieve()
-                    .body(GitHubContributorDto[].class);
+                    .toEntity(String.class);
 
-            return contributors != null ? contributors : new GitHubContributorDto[0];
+            if (response.getStatusCode() == HttpStatus.ACCEPTED || response.getStatusCode() == HttpStatus.NO_CONTENT || response.getBody() == null) {
+                return new GitHubContributorDto[0];
+            }
+
+            String body = response.getBody().trim();
+            if (body.isEmpty() || body.equals("{}") || !body.startsWith("[")) {
+                return new GitHubContributorDto[0];
+            }
+
+            return objectMapper.readValue(body, GitHubContributorDto[].class);
         } catch (HttpClientErrorException.NotFound exception) {
             throw new ResourceNotFoundException(
                     "Repository '" + repo + "' not found for owner '" + owner + "'"
@@ -378,20 +393,30 @@ public class GitHubApiClient {
             throw new RateLimitExceededException(
                     "GitHub API rate limit exceeded. Please try again later."
             );
+        } catch (ResourceNotFoundException | RateLimitExceededException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            return new GitHubContributorDto[0];
         }
     }
 
     public GitHubCommitActivityDto[] getCommitActivity(String owner, String repo) {
         try {
-            ResponseEntity<GitHubCommitActivityDto[]> response = restClient.get()
+            ResponseEntity<String> response = restClient.get()
                     .uri("/repos/{owner}/{repo}/stats/commit_activity", owner, repo)
                     .retrieve()
-                    .toEntity(GitHubCommitActivityDto[].class);
+                    .toEntity(String.class);
 
-            if (response.getStatusCode() == HttpStatus.ACCEPTED || response.getBody() == null) {
+            if (response.getStatusCode() == HttpStatus.ACCEPTED || response.getStatusCode() == HttpStatus.NO_CONTENT || response.getBody() == null) {
                 return null;
             }
-            return response.getBody();
+
+            String body = response.getBody().trim();
+            if (body.isEmpty() || body.equals("{}") || !body.startsWith("[")) {
+                return null;
+            }
+
+            return objectMapper.readValue(body, GitHubCommitActivityDto[].class);
         } catch (HttpClientErrorException.NotFound exception) {
             throw new ResourceNotFoundException(
                     "Repository '" + repo + "' not found for owner '" + owner + "'"
@@ -402,20 +427,30 @@ public class GitHubApiClient {
             throw new RateLimitExceededException(
                     "GitHub API rate limit exceeded. Please try again later."
             );
+        } catch (ResourceNotFoundException | RateLimitExceededException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            return null;
         }
     }
 
     public Number[][] getCodeFrequency(String owner, String repo) {
         try {
-            ResponseEntity<Number[][]> response = restClient.get()
+            ResponseEntity<String> response = restClient.get()
                     .uri("/repos/{owner}/{repo}/stats/code_frequency", owner, repo)
                     .retrieve()
-                    .toEntity(Number[][].class);
+                    .toEntity(String.class);
 
-            if (response.getStatusCode() == HttpStatus.ACCEPTED || response.getBody() == null) {
+            if (response.getStatusCode() == HttpStatus.ACCEPTED || response.getStatusCode() == HttpStatus.NO_CONTENT || response.getBody() == null) {
                 return null;
             }
-            return response.getBody();
+
+            String body = response.getBody().trim();
+            if (body.isEmpty() || body.equals("{}") || !body.startsWith("[")) {
+                return null;
+            }
+
+            return objectMapper.readValue(body, Number[][].class);
         } catch (HttpClientErrorException.NotFound exception) {
             throw new ResourceNotFoundException(
                     "Repository '" + repo + "' not found for owner '" + owner + "'"
@@ -426,20 +461,30 @@ public class GitHubApiClient {
             throw new RateLimitExceededException(
                     "GitHub API rate limit exceeded. Please try again later."
             );
+        } catch (ResourceNotFoundException | RateLimitExceededException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            return null;
         }
     }
 
     public GitHubParticipationDto getParticipation(String owner, String repo) {
         try {
-            ResponseEntity<GitHubParticipationDto> response = restClient.get()
+            ResponseEntity<String> response = restClient.get()
                     .uri("/repos/{owner}/{repo}/stats/participation", owner, repo)
                     .retrieve()
-                    .toEntity(GitHubParticipationDto.class);
+                    .toEntity(String.class);
 
-            if (response.getStatusCode() == HttpStatus.ACCEPTED || response.getBody() == null) {
+            if (response.getStatusCode() == HttpStatus.ACCEPTED || response.getStatusCode() == HttpStatus.NO_CONTENT || response.getBody() == null) {
                 return null;
             }
-            return response.getBody();
+
+            String body = response.getBody().trim();
+            if (body.isEmpty() || body.equals("{}")) {
+                return null;
+            }
+
+            return objectMapper.readValue(body, GitHubParticipationDto.class);
         } catch (HttpClientErrorException.NotFound exception) {
             throw new ResourceNotFoundException(
                     "Repository '" + repo + "' not found for owner '" + owner + "'"
@@ -450,6 +495,10 @@ public class GitHubApiClient {
             throw new RateLimitExceededException(
                     "GitHub API rate limit exceeded. Please try again later."
             );
+        } catch (ResourceNotFoundException | RateLimitExceededException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            return null;
         }
     }
 }

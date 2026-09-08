@@ -6,6 +6,8 @@ import com.gitracker.entity.GitHubUser;
 import com.gitracker.entity.Repository;
 import com.gitracker.repository.GitHubUserRepository;
 import com.gitracker.repository.RepositoryRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
@@ -19,6 +21,8 @@ import java.util.stream.Collectors;
 
 @Service
 public class GitHubRepositoryService {
+
+    private static final Logger log = LoggerFactory.getLogger(GitHubRepositoryService.class);
 
     private final GitHubApiClient gitHubApiClient;
     private final RepositoryRepository repositoryRepository;
@@ -37,12 +41,43 @@ public class GitHubRepositoryService {
     public List<RepositoryResponse> getRepositories(
             String username
     ) {
-
-        GitHubRepositoryDto[] repositories =
-                gitHubApiClient.getRepositories(username);
         GitHubUser owner = gitHubUserRepository
-                .findByUsername(username)
+                .findByUsernameIgnoreCase(username)
                 .orElse(null);
+
+        GitHubRepositoryDto[] repositories;
+        try {
+            repositories = gitHubApiClient.getRepositories(username);
+        } catch (Exception exception) {
+            if (owner != null) {
+                List<Repository> cached = repositoryRepository.findByOwner(owner);
+                if (!cached.isEmpty()) {
+                    log.warn("Failed to fetch fresh repositories for user {} from GitHub API ({}), falling back to cached stale data ({} repos)",
+                            username, exception.getMessage(), cached.size());
+                    return cached.stream()
+                            .map(repo -> new RepositoryResponse(
+                                    repo.getName(),
+                                    repo.getDescription(),
+                                    repo.getStars() != null ? repo.getStars() : 0,
+                                    repo.getForks() != null ? repo.getForks() : 0,
+                                    repo.getWatchers() != null ? repo.getWatchers() : 0,
+                                    repo.getLanguage(),
+                                    repo.getDefaultBranch() != null ? repo.getDefaultBranch() : "main",
+                                    repo.getOpenIssues() != null ? repo.getOpenIssues() : 0,
+                                    repo.getLicenseName(),
+                                    repo.getTopics() != null ? repo.getTopics() : List.of(),
+                                    repo.getHtmlUrl(),
+                                    repo.getSize() != null ? repo.getSize() : 0,
+                                    repo.getArchived() != null ? repo.getArchived() : false,
+                                    repo.getCreatedAt() != null ? repo.getCreatedAt().toString() : null,
+                                    repo.getUpdatedAt() != null ? repo.getUpdatedAt().toString() : null
+                            ))
+                            .toList();
+                }
+            }
+            throw exception;
+        }
+
         Map<Long, Repository> existingRepoMap = owner == null
                 ? Map.of()
                 : repositoryRepository.findByOwner(owner)
@@ -113,7 +148,7 @@ public class GitHubRepositoryService {
             );
         }
 
-        GitHubUser owner = gitHubUserRepository.findByUsername(username).orElse(null);
+        GitHubUser owner = gitHubUserRepository.findByUsernameIgnoreCase(username).orElse(null);
         String licenseName = repo.license() != null ? repo.license().name() : null;
 
         if (owner != null) {

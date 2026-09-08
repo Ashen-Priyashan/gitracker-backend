@@ -70,7 +70,7 @@ class UserAnalyticsServiceTest {
                 .owner(user)
                 .build();
 
-        when(gitHubUserRepository.findByUsername("octocat"))
+        when(gitHubUserRepository.findByUsernameIgnoreCase("octocat"))
                 .thenReturn(Optional.of(user));
 
         when(repositoryRepository.findByOwner(user))
@@ -115,7 +115,7 @@ class UserAnalyticsServiceTest {
                 .owner(user)
                 .build();
 
-        when(gitHubUserRepository.findByUsername("octocat"))
+        when(gitHubUserRepository.findByUsernameIgnoreCase("octocat"))
                 .thenReturn(Optional.of(user));
 
         when(repositoryRepository.findByOwner(user))
@@ -148,7 +148,7 @@ class UserAnalyticsServiceTest {
                 .owner(user)
                 .build();
 
-        when(gitHubUserRepository.findByUsername("octocat"))
+        when(gitHubUserRepository.findByUsernameIgnoreCase("octocat"))
                 .thenReturn(Optional.empty())
                 .thenReturn(Optional.of(user));
 
@@ -189,7 +189,7 @@ class UserAnalyticsServiceTest {
                 .githubUser(user)
                 .build();
 
-        when(gitHubUserRepository.findByUsername("octocat"))
+        when(gitHubUserRepository.findByUsernameIgnoreCase("octocat"))
                 .thenReturn(Optional.of(user));
 
         when(repositoryRepository.findByOwner(user))
@@ -215,7 +215,7 @@ class UserAnalyticsServiceTest {
     void shouldThrowExceptionWhenUserDoesNotExist() {
 
         // Arrange
-        when(gitHubUserRepository.findByUsername("octocat"))
+        when(gitHubUserRepository.findByUsernameIgnoreCase("octocat"))
                 .thenReturn(Optional.empty());
 
         doThrow(new ResourceNotFoundException("GitHub user not found"))
@@ -228,5 +228,56 @@ class UserAnalyticsServiceTest {
         );
 
         verify(repositoryRepository, never()).findByOwner(any());
+    }
+
+    @Test
+    void shouldNotFetchRepositoriesWhenUserHasZeroPublicRepos() {
+        GitHubUser user = GitHubUser.builder()
+                .username("zerouser")
+                .publicRepos(0)
+                .build();
+
+        when(gitHubUserRepository.findByUsernameIgnoreCase("zerouser"))
+                .thenReturn(Optional.of(user));
+        when(repositoryRepository.findByOwner(user))
+                .thenReturn(List.of());
+        when(userAnalyticsRepository.findByGithubUser(user))
+                .thenReturn(Optional.empty());
+        when(userAnalyticsRepository.save(any(UserAnalytics.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        UserAnalytics analytics = userAnalyticsService.generateAnalytics("zerouser");
+
+        assertEquals(0, analytics.getTotalRepositories());
+        assertEquals(0, analytics.getTotalStars());
+        assertEquals(0, analytics.getTotalForks());
+        assertEquals("Unknown", analytics.getMostUsedLanguage());
+
+        verify(gitHubRepositoryService, never()).getRepositories(anyString());
+    }
+
+    @Test
+    void shouldHandleGracefullyWhenRepositoryFetchThrowsException() {
+        GitHubUser user = GitHubUser.builder()
+                .username("octocat")
+                .publicRepos(5)
+                .build();
+
+        when(gitHubUserRepository.findByUsernameIgnoreCase("octocat"))
+                .thenReturn(Optional.of(user));
+        when(repositoryRepository.findByOwner(user))
+                .thenReturn(List.of());
+        doThrow(new RuntimeException("GitHub rate limited"))
+                .when(gitHubRepositoryService).getRepositories("octocat");
+        when(userAnalyticsRepository.findByGithubUser(user))
+                .thenReturn(Optional.empty());
+        when(userAnalyticsRepository.save(any(UserAnalytics.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        UserAnalytics analytics = userAnalyticsService.generateAnalytics("octocat");
+
+        assertNotNull(analytics);
+        assertEquals(0, analytics.getTotalRepositories());
+        verify(userAnalyticsRepository).save(any(UserAnalytics.class));
     }
 }

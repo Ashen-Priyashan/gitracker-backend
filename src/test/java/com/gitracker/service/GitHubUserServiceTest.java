@@ -49,7 +49,7 @@ class GitHubUserServiceTest {
                 .createdAt(LocalDateTime.now())
                 .build();
 
-        when(gitHubUserRepository.findByUsername("octocat"))
+        when(gitHubUserRepository.findByUsernameIgnoreCase("octocat"))
                 .thenReturn(Optional.of(user));
 
         // Act
@@ -81,7 +81,7 @@ class GitHubUserServiceTest {
                 "2024-01-01T00:00:00Z"
         );
 
-        when(gitHubUserRepository.findByUsername("octocat"))
+        when(gitHubUserRepository.findByUsernameIgnoreCase("octocat"))
                 .thenReturn(Optional.empty());
 
         when(gitHubApiClient.getUser("octocat"))
@@ -128,7 +128,7 @@ class GitHubUserServiceTest {
                 "2024-01-01T00:00:00Z"
         );
 
-        when(gitHubUserRepository.findByUsername("octocat"))
+        when(gitHubUserRepository.findByUsernameIgnoreCase("octocat"))
                 .thenReturn(Optional.of(staleUser));
 
         when(gitHubApiClient.getUser("octocat"))
@@ -164,7 +164,7 @@ class GitHubUserServiceTest {
                 .updatedAt(LocalDateTime.now().minusMinutes(30))
                 .build();
 
-        when(gitHubUserRepository.findByUsername("octocat"))
+        when(gitHubUserRepository.findByUsernameIgnoreCase("octocat"))
                 .thenReturn(Optional.of(staleUser));
 
         when(gitHubApiClient.getUser("octocat"))

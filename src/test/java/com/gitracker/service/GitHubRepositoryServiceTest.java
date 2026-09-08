@@ -67,7 +67,7 @@ class GitHubRepositoryServiceTest {
         when(gitHubApiClient.getRepositories("octocat"))
                 .thenReturn(new GitHubRepositoryDto[]{repositoryDto});
 
-        when(gitHubUserRepository.findByUsername("octocat"))
+        when(gitHubUserRepository.findByUsernameIgnoreCase("octocat"))
                 .thenReturn(Optional.of(owner));
 
         when(repositoryRepository.findByOwner(owner))
@@ -107,7 +107,7 @@ class GitHubRepositoryServiceTest {
         when(gitHubApiClient.getRepositories("octocat"))
                 .thenReturn(new GitHubRepositoryDto[]{repositoryDto});
 
-        when(gitHubUserRepository.findByUsername("octocat"))
+        when(gitHubUserRepository.findByUsernameIgnoreCase("octocat"))
                 .thenReturn(Optional.of(owner));
 
         when(repositoryRepository.findByOwner(owner))
@@ -130,7 +130,7 @@ class GitHubRepositoryServiceTest {
         GitHubUser owner = GitHubUser.builder().username("octocat").build();
 
         when(gitHubApiClient.getRepository("octocat", "gitracker")).thenReturn(repositoryDto);
-        when(gitHubUserRepository.findByUsername("octocat")).thenReturn(Optional.of(owner));
+        when(gitHubUserRepository.findByUsernameIgnoreCase("octocat")).thenReturn(Optional.of(owner));
         when(repositoryRepository.findByOwner(owner)).thenReturn(List.of());
 
         RepositoryResponse response = gitHubRepositoryService.getRepository("octocat", "gitracker");
@@ -147,7 +147,7 @@ class GitHubRepositoryServiceTest {
         Repository existing = Repository.builder().repoId(1L).owner(owner).build();
 
         when(gitHubApiClient.getRepository("octocat", "gitracker")).thenReturn(repositoryDto);
-        when(gitHubUserRepository.findByUsername("octocat")).thenReturn(Optional.of(owner));
+        when(gitHubUserRepository.findByUsernameIgnoreCase("octocat")).thenReturn(Optional.of(owner));
         when(repositoryRepository.findByOwner(owner)).thenReturn(List.of(existing));
 
         RepositoryResponse response = gitHubRepositoryService.getRepository("octocat", "gitracker");
@@ -166,7 +166,7 @@ class GitHubRepositoryServiceTest {
         when(gitHubApiClient.getRepositories("octocat"))
                 .thenReturn(new GitHubRepositoryDto[]{repositoryDto});
 
-        when(gitHubUserRepository.findByUsername("octocat"))
+        when(gitHubUserRepository.findByUsernameIgnoreCase("octocat"))
                 .thenReturn(Optional.empty());
 
         // Act
@@ -414,5 +414,32 @@ class GitHubRepositoryServiceTest {
         assertNotNull(response);
         assertEquals("CALCULATING", response.status());
         assertTrue(response.allCommits().isEmpty());
+    }
+
+    @Test
+    void shouldFallbackToCachedRepositoriesWhenGitHubApiThrowsException() {
+        GitHubUser owner = GitHubUser.builder().username("octocat").build();
+        Repository cachedRepo = Repository.builder()
+                .repoId(1L)
+                .name("cached-repo")
+                .stars(50)
+                .forks(10)
+                .language("Java")
+                .owner(owner)
+                .build();
+
+        when(gitHubUserRepository.findByUsernameIgnoreCase("octocat"))
+                .thenReturn(Optional.of(owner));
+        when(gitHubApiClient.getRepositories("octocat"))
+                .thenThrow(new RuntimeException("GitHub API rate limit exceeded"));
+        when(repositoryRepository.findByOwner(owner))
+                .thenReturn(List.of(cachedRepo));
+
+        List<RepositoryResponse> response = gitHubRepositoryService.getRepositories("octocat");
+
+        assertNotNull(response);
+        assertEquals(1, response.size());
+        assertEquals("cached-repo", response.getFirst().name());
+        assertEquals(50, response.getFirst().stars());
     }
 }

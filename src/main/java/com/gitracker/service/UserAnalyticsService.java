@@ -40,10 +40,10 @@ public class UserAnalyticsService {
     public UserAnalytics generateAnalytics(String username) {
 
         GitHubUser user = gitHubUserRepository
-                .findByUsername(username)
+                .findByUsernameIgnoreCase(username)
                 .orElseGet(() -> {
                     gitHubUserService.getUser(username);
-                    return gitHubUserRepository.findByUsername(username)
+                    return gitHubUserRepository.findByUsernameIgnoreCase(username)
                             .orElseThrow(() ->
                                     new ResourceNotFoundException(
                                             "GitHub user not found"
@@ -54,9 +54,13 @@ public class UserAnalyticsService {
         List<Repository> repositories =
                 repositoryRepository.findByOwner(user);
 
-        if (repositories.isEmpty()) {
-            gitHubRepositoryService.getRepositories(username);
-            repositories = repositoryRepository.findByOwner(user);
+        if (repositories.isEmpty() && (user.getPublicRepos() == null || user.getPublicRepos() > 0)) {
+            try {
+                gitHubRepositoryService.getRepositories(username);
+                repositories = repositoryRepository.findByOwner(user);
+            } catch (Exception ignored) {
+                // If repository fetch fails (e.g. rate limit), proceed with empty or cached repos
+            }
         }
 
         int totalRepositories = repositories.size();

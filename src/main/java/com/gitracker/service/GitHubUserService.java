@@ -45,7 +45,7 @@ public class GitHubUserService {
     public GitHubUserResponse getUser(String username) {
 
         var existingUser =
-                gitHubUserRepository.findByUsername(username);
+                gitHubUserRepository.findByUsernameIgnoreCase(username);
 
         if (existingUser.isPresent()) {
 
@@ -88,7 +88,7 @@ public class GitHubUserService {
                         freshUser.createdAt()
                 );
             } catch (Exception e) {
-                log.warn("Failed to refresh user {} from GitHub API, falling back to cached data: {}", username, e.getMessage());
+                log.warn("Failed to refresh user {} from GitHub API, falling back to cached stale data: {}", username, e.getMessage());
                 return new GitHubUserResponse(
                         user.getUsername(),
                         user.getName(),

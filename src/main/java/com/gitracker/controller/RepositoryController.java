@@ -1,10 +1,6 @@
 package com.gitracker.controller;
 
-import com.gitracker.dto.BranchResponse;
-import com.gitracker.dto.CommitDetailResponse;
-import com.gitracker.dto.CommitSummaryResponse;
-import com.gitracker.dto.ReadmeResponse;
-import com.gitracker.dto.RepositoryResponse;
+import com.gitracker.dto.*;
 import com.gitracker.service.GitHubRepositoryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -204,5 +200,117 @@ public class RepositoryController {
             @PathVariable String sha
     ) {
         return repositoryService.getCommit(username, repoName, sha);
+    }
+
+    @Operation(
+            summary = "Get repository contributors",
+            description = "Retrieves the list of contributors and their contribution counts for a specific repository."
+    )
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Contributors retrieved successfully"
+            ),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "Repository or user not found"
+            ),
+            @ApiResponse(
+                    responseCode = "429",
+                    description = "GitHub API rate limit exceeded"
+            )
+    })
+    @GetMapping("/{username}/repositories/{repoName}/contributors")
+    public List<ContributorResponse> getContributors(
+            @Parameter(description = "GitHub username", example = "octocat")
+            @PathVariable String username,
+            @Parameter(description = "Repository name", example = "Hello-World")
+            @PathVariable String repoName
+    ) {
+        return repositoryService.getContributors(username, repoName);
+    }
+
+    @Operation(
+            summary = "Get commit activity statistics",
+            description = "Retrieves 52-week commit activity history for a specific repository."
+    )
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Commit activity statistics retrieved successfully"
+            ),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "Repository or user not found"
+            ),
+            @ApiResponse(
+                    responseCode = "429",
+                    description = "GitHub API rate limit exceeded"
+            )
+    })
+    @GetMapping("/{username}/repositories/{repoName}/stats/commit-activity")
+    public CommitActivityResponse getCommitActivity(
+            @Parameter(description = "GitHub username", example = "octocat")
+            @PathVariable String username,
+            @Parameter(description = "Repository name", example = "Hello-World")
+            @PathVariable String repoName
+    ) {
+        return repositoryService.getCommitActivity(username, repoName);
+    }
+
+    @Operation(
+            summary = "Get code frequency statistics",
+            description = "Retrieves weekly additions and deletions for a specific repository."
+    )
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Code frequency statistics retrieved successfully"
+            ),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "Repository or user not found"
+            ),
+            @ApiResponse(
+                    responseCode = "429",
+                    description = "GitHub API rate limit exceeded"
+            )
+    })
+    @GetMapping("/{username}/repositories/{repoName}/stats/code-frequency")
+    public CodeFrequencyResponse getCodeFrequency(
+            @Parameter(description = "GitHub username", example = "octocat")
+            @PathVariable String username,
+            @Parameter(description = "Repository name", example = "Hello-World")
+            @PathVariable String repoName
+    ) {
+        return repositoryService.getCodeFrequency(username, repoName);
+    }
+
+    @Operation(
+            summary = "Get participation statistics",
+            description = "Retrieves weekly commit count split between the repository owner and all contributors."
+    )
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Participation statistics retrieved successfully"
+            ),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "Repository or user not found"
+            ),
+            @ApiResponse(
+                    responseCode = "429",
+                    description = "GitHub API rate limit exceeded"
+            )
+    })
+    @GetMapping("/{username}/repositories/{repoName}/stats/participation")
+    public ParticipationResponse getParticipation(
+            @Parameter(description = "GitHub username", example = "octocat")
+            @PathVariable String username,
+            @Parameter(description = "Repository name", example = "Hello-World")
+            @PathVariable String repoName
+    ) {
+        return repositoryService.getParticipation(username, repoName);
     }
 }

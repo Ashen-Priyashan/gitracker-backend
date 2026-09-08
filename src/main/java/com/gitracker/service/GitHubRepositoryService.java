@@ -216,6 +216,70 @@ public class GitHubRepositoryService {
         return mapToCommitDetail(username, repoName, commit);
     }
 
+    public List<ContributorResponse> getContributors(String username, String repoName) {
+        GitHubContributorDto[] contributors = gitHubApiClient.getContributors(username, repoName);
+        if (contributors == null) {
+            return List.of();
+        }
+
+        return Arrays.stream(contributors)
+                .map(c -> new ContributorResponse(
+                        c.login(),
+                        c.avatarUrl(),
+                        c.htmlUrl(),
+                        c.contributions(),
+                        c.type()
+                ))
+                .toList();
+    }
+
+    public CommitActivityResponse getCommitActivity(String username, String repoName) {
+        GitHubCommitActivityDto[] activity = gitHubApiClient.getCommitActivity(username, repoName);
+        if (activity == null) {
+            return new CommitActivityResponse("CALCULATING", 0, List.of());
+        }
+
+        List<CommitActivityWeekResponse> weeks = Arrays.stream(activity)
+                .map(w -> new CommitActivityWeekResponse(
+                        w.week(),
+                        w.total(),
+                        w.days() != null ? w.days() : List.of()
+                ))
+                .toList();
+        int totalYearCommits = weeks.stream().mapToInt(CommitActivityWeekResponse::totalCommits).sum();
+        return new CommitActivityResponse("READY", totalYearCommits, weeks);
+    }
+
+    public CodeFrequencyResponse getCodeFrequency(String username, String repoName) {
+        Number[][] rawStats = gitHubApiClient.getCodeFrequency(username, repoName);
+        if (rawStats == null) {
+            return new CodeFrequencyResponse("CALCULATING", List.of());
+        }
+
+        List<CodeFrequencyWeekResponse> weeklyStats = new java.util.ArrayList<>();
+        for (Number[] entry : rawStats) {
+            if (entry != null && entry.length >= 3) {
+                long timestamp = entry[0] != null ? entry[0].longValue() : 0L;
+                int additions = entry[1] != null ? entry[1].intValue() : 0;
+                int deletions = entry[2] != null ? entry[2].intValue() : 0;
+                int netChange = additions + deletions;
+                weeklyStats.add(new CodeFrequencyWeekResponse(timestamp, additions, deletions, netChange));
+            }
+        }
+        return new CodeFrequencyResponse("READY", weeklyStats);
+    }
+
+    public ParticipationResponse getParticipation(String username, String repoName) {
+        GitHubParticipationDto participation = gitHubApiClient.getParticipation(username, repoName);
+        if (participation == null) {
+            return new ParticipationResponse("CALCULATING", List.of(), List.of());
+        }
+
+        List<Integer> all = participation.all() != null ? participation.all() : List.of();
+        List<Integer> owner = participation.owner() != null ? participation.owner() : List.of();
+        return new ParticipationResponse("READY", all, owner);
+    }
+
     private CommitSummaryResponse mapToCommitSummary(GitHubCommitListDto dto) {
         String sha = dto.sha();
         String shortSha = sha != null && sha.length() >= 7 ? sha.substring(0, 7) : sha;

@@ -154,9 +154,22 @@ class GitHubApiClientTest {
     @Test
     void shouldThrowRateLimitExceededWhenFetchingBranchesRateLimited() {
         server.expect(requestTo("https://api.github.com/repos/octocat/Hello-World/branches?per_page=100&page=1"))
-                .andRespond(withStatus(HttpStatus.FORBIDDEN));
+                .andRespond(withStatus(HttpStatus.FORBIDDEN)
+                        .header("X-RateLimit-Remaining", "0")
+                        .header("Retry-After", "60"));
 
         assertThrows(RateLimitExceededException.class, () -> gitHubApiClient.getBranches("octocat", "Hello-World"));
+        server.verify();
+    }
+
+    @Test
+    void shouldThrowGitHubForbiddenWhenFetchingBranchesForbidden() {
+        server.expect(requestTo("https://api.github.com/repos/octocat/Hello-World/branches?per_page=100&page=1"))
+                .andRespond(withStatus(HttpStatus.FORBIDDEN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"message\":\"Repository access blocked\"}"));
+
+        assertThrows(com.gitracker.exception.GitHubForbiddenException.class, () -> gitHubApiClient.getBranches("octocat", "Hello-World"));
         server.verify();
     }
 
@@ -389,6 +402,93 @@ class GitHubApiClientTest {
         GitHubParticipationDto participation = gitHubApiClient.getParticipation("octocat", "Hello-World");
 
         assertNull(participation);
+        server.verify();
+    }
+
+    @Test
+    void shouldThrowRateLimitExceededOn429TooManyRequests() {
+        org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+        headers.add("Retry-After", "60");
+        headers.add("X-RateLimit-Reset", "1640000000");
+
+        server.expect(requestTo("https://api.github.com/users/octocat"))
+                .andRespond(withStatus(HttpStatus.TOO_MANY_REQUESTS).headers(headers));
+
+        RateLimitExceededException ex = assertThrows(RateLimitExceededException.class, () -> gitHubApiClient.getUser("octocat"));
+        assertEquals(60L, ex.getRetryAfterSeconds());
+        assertEquals(1640000000L, ex.getResetTimeSeconds());
+        server.verify();
+    }
+
+    @Test
+    void shouldThrowRateLimitExceededOn403WithZeroRemainingHeader() {
+        org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+        headers.add("X-RateLimit-Remaining", "0");
+        headers.add("X-RateLimit-Reset", "1640000000");
+
+        server.expect(requestTo("https://api.github.com/users/octocat"))
+                .andRespond(withStatus(HttpStatus.FORBIDDEN).headers(headers));
+
+        RateLimitExceededException ex = assertThrows(RateLimitExceededException.class, () -> gitHubApiClient.getUser("octocat"));
+        assertEquals(1640000000L, ex.getResetTimeSeconds());
+        server.verify();
+    }
+
+    @Test
+    void shouldThrowRateLimitExceededOn403WithRateLimitBody() {
+        server.expect(requestTo("https://api.github.com/users/octocat"))
+                .andRespond(withStatus(HttpStatus.FORBIDDEN)
+                        .body("{\"message\": \"API rate limit exceeded for user\"}")
+                        .contentType(MediaType.APPLICATION_JSON));
+
+        assertThrows(RateLimitExceededException.class, () -> gitHubApiClient.getUser("octocat"));
+        server.verify();
+    }
+
+    @Test
+    void shouldThrowGitHubForbiddenOn403WithoutRateLimit() {
+        server.expect(requestTo("https://api.github.com/users/secretuser"))
+                .andRespond(withStatus(HttpStatus.FORBIDDEN)
+                        .body("{\"message\": \"Resource access is restricted\"}")
+                        .contentType(MediaType.APPLICATION_JSON));
+
+        assertThrows(com.gitracker.exception.GitHubForbiddenException.class, () -> gitHubApiClient.getUser("secretuser"));
+        server.verify();
+    }
+
+    @Test
+    void shouldThrowGitHubAuthenticationOn401Unauthorized() {
+        server.expect(requestTo("https://api.github.com/user"))
+                .andRespond(withStatus(HttpStatus.UNAUTHORIZED));
+
+        assertThrows(com.gitracker.exception.GitHubAuthenticationException.class, () -> gitHubApiClient.getAuthenticatedUser("invalid-token"));
+        server.verify();
+    }
+
+    @Test
+    void shouldThrowGitHubValidationOn422UnprocessableEntity() {
+        server.expect(requestTo("https://api.github.com/users/invalid/repos?per_page=100&page=1&sort=updated"))
+                .andRespond(withStatus(HttpStatus.UNPROCESSABLE_ENTITY));
+
+        assertThrows(com.gitracker.exception.GitHubValidationException.class, () -> gitHubApiClient.getRepositories("invalid"));
+        server.verify();
+    }
+
+    @Test
+    void shouldThrowGitHubServiceUnavailableOn500ServerError() {
+        server.expect(requestTo("https://api.github.com/users/octocat"))
+                .andRespond(withStatus(HttpStatus.INTERNAL_SERVER_ERROR));
+
+        assertThrows(com.gitracker.exception.GitHubServiceUnavailableException.class, () -> gitHubApiClient.getUser("octocat"));
+        server.verify();
+    }
+
+    @Test
+    void shouldThrowGitHubServiceUnavailableOn503ServiceUnavailable() {
+        server.expect(requestTo("https://api.github.com/users/octocat"))
+                .andRespond(withStatus(HttpStatus.SERVICE_UNAVAILABLE));
+
+        assertThrows(com.gitracker.exception.GitHubServiceUnavailableException.class, () -> gitHubApiClient.getUser("octocat"));
         server.verify();
     }
 }

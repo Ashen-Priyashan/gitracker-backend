@@ -70,24 +70,15 @@ public class GitHubApiClient {
     }
 
     public GitHubUserDto getUser(String username) {
-
         try {
             return restClient.get()
                     .uri("/users/{username}", username)
                     .retrieve()
                     .body(GitHubUserDto.class);
-
-        } catch (HttpClientErrorException.NotFound exception) {
-
-            throw new ResourceNotFoundException(
-                    "GitHub user '" + username + "' not found"
-            );
-
-        } catch (HttpClientErrorException.Forbidden exception) {
-
-            throw new RateLimitExceededException(
-                    "GitHub API rate limit exceeded. Please try again later."
-            );
+        } catch (HttpClientErrorException exception) {
+            throw handleHttpClientError(exception, "GitHub user '" + username + "'");
+        } catch (Exception exception) {
+            throw handleGeneralException(exception, "GitHub user '" + username + "'");
         }
     }
 
@@ -118,15 +109,13 @@ public class GitHubApiClient {
                 page++;
             } catch (HttpClientErrorException.NotFound exception) {
                 if (page == 1) {
-                    throw new ResourceNotFoundException(
-                            "GitHub user '" + username + "' not found"
-                    );
+                    throw handleHttpClientError(exception, "GitHub user '" + username + "'");
                 }
                 break;
-            } catch (HttpClientErrorException.Forbidden exception) {
-                throw new RateLimitExceededException(
-                        "GitHub API rate limit exceeded. Please try again later."
-                );
+            } catch (HttpClientErrorException exception) {
+                throw handleHttpClientError(exception, "repositories for user '" + username + "'");
+            } catch (Exception exception) {
+                throw handleGeneralException(exception, "repositories for user '" + username + "'");
             }
         }
 
@@ -139,28 +128,25 @@ public class GitHubApiClient {
                     .uri("/repos/{owner}/{repo}", owner, repo)
                     .retrieve()
                     .body(GitHubRepositoryDto.class);
-        } catch (HttpClientErrorException.NotFound exception) {
-            throw new ResourceNotFoundException("Repository '" + repo + "' not found for owner '" + owner + "'");
-        } catch (HttpClientErrorException.Forbidden exception) {
-            throw new RateLimitExceededException("GitHub API rate limit exceeded. Please try again later.");
+        } catch (HttpClientErrorException exception) {
+            throw handleHttpClientError(exception, "Repository '" + repo + "' for owner '" + owner + "'");
+        } catch (Exception exception) {
+            throw handleGeneralException(exception, "Repository '" + repo + "' for owner '" + owner + "'");
         }
     }
 
     public GitHubReadmeDto getReadme(String username, String repoName) {
-
         try {
             return restClient.get()
                     .uri("/repos/{username}/{repoName}/readme", username, repoName)
                     .retrieve()
                     .body(GitHubReadmeDto.class);
-
         } catch (HttpClientErrorException.NotFound exception) {
             return null;
-
-        } catch (HttpClientErrorException.Forbidden exception) {
-            throw new RateLimitExceededException(
-                    "GitHub API rate limit exceeded. Please try again later."
-            );
+        } catch (HttpClientErrorException exception) {
+            throw handleHttpClientError(exception, "README for repository '" + repoName + "'");
+        } catch (Exception exception) {
+            return null;
         }
     }
 
@@ -171,14 +157,10 @@ public class GitHubApiClient {
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
                     .retrieve()
                     .body(GitHubUserDto.class);
-
-        } catch (HttpClientErrorException.Unauthorized exception) {
-            throw new ResourceNotFoundException("Invalid or expired GitHub access token.");
-
-        } catch (HttpClientErrorException.Forbidden exception) {
-            throw new RateLimitExceededException(
-                    "GitHub API rate limit exceeded. Please try again later."
-            );
+        } catch (HttpClientErrorException exception) {
+            throw handleHttpClientError(exception, "authenticated user");
+        } catch (Exception exception) {
+            throw handleGeneralException(exception, "authenticated user");
         }
     }
 
@@ -205,12 +187,10 @@ public class GitHubApiClient {
                 }
 
                 page++;
-            } catch (HttpClientErrorException.Unauthorized exception) {
-                throw new ResourceNotFoundException("Invalid or expired GitHub access token.");
-            } catch (HttpClientErrorException.Forbidden exception) {
-                throw new RateLimitExceededException(
-                        "GitHub API rate limit exceeded. Please try again later."
-                );
+            } catch (HttpClientErrorException exception) {
+                throw handleHttpClientError(exception, "authenticated user repositories");
+            } catch (Exception exception) {
+                throw handleGeneralException(exception, "authenticated user repositories");
             }
         }
 
@@ -241,15 +221,13 @@ public class GitHubApiClient {
                 page++;
             } catch (HttpClientErrorException.NotFound exception) {
                 if (page == 1) {
-                    throw new ResourceNotFoundException(
-                            "Repository '" + repo + "' not found for owner '" + owner + "'"
-                    );
+                    throw handleHttpClientError(exception, "Repository '" + repo + "' for owner '" + owner + "'");
                 }
                 break;
-            } catch (HttpClientErrorException.Forbidden exception) {
-                throw new RateLimitExceededException(
-                        "GitHub API rate limit exceeded. Please try again later."
-                );
+            } catch (HttpClientErrorException exception) {
+                throw handleHttpClientError(exception, "branches for repository '" + repo + "'");
+            } catch (Exception exception) {
+                throw handleGeneralException(exception, "branches for repository '" + repo + "'");
             }
         }
 
@@ -279,18 +257,16 @@ public class GitHubApiClient {
             return commits != null ? commits : new GitHubCommitListDto[0];
         } catch (HttpClientErrorException.NotFound exception) {
             if (safePage == 1) {
-                throw new ResourceNotFoundException(
-                        "Repository '" + repo + "' or branch '" + (branch != null ? branch : "") + "' not found for owner '" + owner + "'"
-                );
+                throw handleHttpClientError(exception, "Repository '" + repo + "' or branch '" + (branch != null ? branch : "") + "' for owner '" + owner + "'");
             }
             return new GitHubCommitListDto[0];
         } catch (HttpClientErrorException.Conflict exception) {
             // Empty git repository returns 409 Conflict
             return new GitHubCommitListDto[0];
-        } catch (HttpClientErrorException.Forbidden exception) {
-            throw new RateLimitExceededException(
-                    "GitHub API rate limit exceeded. Please try again later."
-            );
+        } catch (HttpClientErrorException exception) {
+            throw handleHttpClientError(exception, "commits for repository '" + repo + "'");
+        } catch (Exception exception) {
+            throw handleGeneralException(exception, "commits for repository '" + repo + "'");
         }
     }
 
@@ -300,14 +276,10 @@ public class GitHubApiClient {
                     .uri("/repos/{owner}/{repo}/commits/{sha}", owner, repo, sha)
                     .retrieve()
                     .body(GitHubCommitDetailDto.class);
-        } catch (HttpClientErrorException.NotFound exception) {
-            throw new ResourceNotFoundException(
-                    "Commit '" + sha + "' not found in repository '" + repo + "' for owner '" + owner + "'"
-            );
-        } catch (HttpClientErrorException.Forbidden exception) {
-            throw new RateLimitExceededException(
-                    "GitHub API rate limit exceeded. Please try again later."
-            );
+        } catch (HttpClientErrorException exception) {
+            throw handleHttpClientError(exception, "Commit '" + sha + "' in repository '" + repo + "' for owner '" + owner + "'");
+        } catch (Exception exception) {
+            throw handleGeneralException(exception, "Commit '" + sha + "' in repository '" + repo + "' for owner '" + owner + "'");
         }
     }
 
@@ -383,17 +355,11 @@ public class GitHubApiClient {
             }
 
             return objectMapper.readValue(body, GitHubContributorDto[].class);
-        } catch (HttpClientErrorException.NotFound exception) {
-            throw new ResourceNotFoundException(
-                    "Repository '" + repo + "' not found for owner '" + owner + "'"
-            );
         } catch (HttpClientErrorException.Conflict exception) {
             return new GitHubContributorDto[0];
-        } catch (HttpClientErrorException.Forbidden exception) {
-            throw new RateLimitExceededException(
-                    "GitHub API rate limit exceeded. Please try again later."
-            );
-        } catch (ResourceNotFoundException | RateLimitExceededException exception) {
+        } catch (HttpClientErrorException exception) {
+            throw handleHttpClientError(exception, "Repository '" + repo + "' for owner '" + owner + "'");
+        } catch (ResourceNotFoundException | RateLimitExceededException | com.gitracker.exception.GitHubForbiddenException | com.gitracker.exception.GitHubAuthenticationException | com.gitracker.exception.GitHubValidationException | com.gitracker.exception.GitHubServiceUnavailableException exception) {
             throw exception;
         } catch (Exception exception) {
             return new GitHubContributorDto[0];
@@ -417,17 +383,11 @@ public class GitHubApiClient {
             }
 
             return objectMapper.readValue(body, GitHubCommitActivityDto[].class);
-        } catch (HttpClientErrorException.NotFound exception) {
-            throw new ResourceNotFoundException(
-                    "Repository '" + repo + "' not found for owner '" + owner + "'"
-            );
         } catch (HttpClientErrorException.Conflict exception) {
             return new GitHubCommitActivityDto[0];
-        } catch (HttpClientErrorException.Forbidden exception) {
-            throw new RateLimitExceededException(
-                    "GitHub API rate limit exceeded. Please try again later."
-            );
-        } catch (ResourceNotFoundException | RateLimitExceededException exception) {
+        } catch (HttpClientErrorException exception) {
+            throw handleHttpClientError(exception, "Repository '" + repo + "' for owner '" + owner + "'");
+        } catch (ResourceNotFoundException | RateLimitExceededException | com.gitracker.exception.GitHubForbiddenException | com.gitracker.exception.GitHubAuthenticationException | com.gitracker.exception.GitHubValidationException | com.gitracker.exception.GitHubServiceUnavailableException exception) {
             throw exception;
         } catch (Exception exception) {
             return null;
@@ -451,17 +411,11 @@ public class GitHubApiClient {
             }
 
             return objectMapper.readValue(body, Number[][].class);
-        } catch (HttpClientErrorException.NotFound exception) {
-            throw new ResourceNotFoundException(
-                    "Repository '" + repo + "' not found for owner '" + owner + "'"
-            );
         } catch (HttpClientErrorException.Conflict exception) {
             return new Number[0][0];
-        } catch (HttpClientErrorException.Forbidden exception) {
-            throw new RateLimitExceededException(
-                    "GitHub API rate limit exceeded. Please try again later."
-            );
-        } catch (ResourceNotFoundException | RateLimitExceededException exception) {
+        } catch (HttpClientErrorException exception) {
+            throw handleHttpClientError(exception, "Repository '" + repo + "' for owner '" + owner + "'");
+        } catch (ResourceNotFoundException | RateLimitExceededException | com.gitracker.exception.GitHubForbiddenException | com.gitracker.exception.GitHubAuthenticationException | com.gitracker.exception.GitHubValidationException | com.gitracker.exception.GitHubServiceUnavailableException exception) {
             throw exception;
         } catch (Exception exception) {
             return null;
@@ -485,20 +439,137 @@ public class GitHubApiClient {
             }
 
             return objectMapper.readValue(body, GitHubParticipationDto.class);
-        } catch (HttpClientErrorException.NotFound exception) {
-            throw new ResourceNotFoundException(
-                    "Repository '" + repo + "' not found for owner '" + owner + "'"
-            );
         } catch (HttpClientErrorException.Conflict exception) {
             return new GitHubParticipationDto(List.of(), List.of());
-        } catch (HttpClientErrorException.Forbidden exception) {
-            throw new RateLimitExceededException(
-                    "GitHub API rate limit exceeded. Please try again later."
-            );
-        } catch (ResourceNotFoundException | RateLimitExceededException exception) {
+        } catch (HttpClientErrorException exception) {
+            throw handleHttpClientError(exception, "Repository '" + repo + "' for owner '" + owner + "'");
+        } catch (ResourceNotFoundException | RateLimitExceededException | com.gitracker.exception.GitHubForbiddenException | com.gitracker.exception.GitHubAuthenticationException | com.gitracker.exception.GitHubValidationException | com.gitracker.exception.GitHubServiceUnavailableException exception) {
             throw exception;
         } catch (Exception exception) {
             return null;
         }
+    }
+
+    private RuntimeException handleHttpClientError(HttpClientErrorException exception, String context) {
+        HttpHeaders headers = exception.getResponseHeaders();
+        int statusCode = exception.getStatusCode().value();
+
+        if (statusCode == 429) {
+            Long retryAfter = extractRetryAfter(headers);
+            Long resetTime = extractRateLimitReset(headers);
+            return new RateLimitExceededException("GitHub API rate limit exceeded. Please try again later.", retryAfter, resetTime);
+        }
+
+        if (statusCode == 403) {
+            if (isRateLimitResponse(exception)) {
+                Long retryAfter = extractRetryAfter(headers);
+                Long resetTime = extractRateLimitReset(headers);
+                return new RateLimitExceededException("GitHub API rate limit exceeded. Please try again later.", retryAfter, resetTime);
+            }
+            return new com.gitracker.exception.GitHubForbiddenException("GitHub access to this resource is currently unavailable.");
+        }
+
+        if (statusCode == 404) {
+            return new ResourceNotFoundException(context + " not found");
+        }
+
+        if (statusCode == 401) {
+            return new com.gitracker.exception.GitHubAuthenticationException("Invalid or expired GitHub access token.");
+        }
+
+        if (statusCode == 422) {
+            return new com.gitracker.exception.GitHubValidationException("GitHub API unprocessable entity for " + context + ".");
+        }
+
+        if (statusCode >= 500) {
+            return new com.gitracker.exception.GitHubServiceUnavailableException("GitHub is temporarily unavailable. Please try again shortly.");
+        }
+
+        return new com.gitracker.exception.GitHubServiceUnavailableException("GitHub is temporarily unavailable. Please try again shortly.", exception);
+    }
+
+    private RuntimeException handleGeneralException(Exception exception, String context) {
+        if (exception instanceof HttpClientErrorException httpError) {
+            return handleHttpClientError(httpError, context);
+        }
+        if (exception instanceof org.springframework.web.client.HttpStatusCodeException statusError) {
+            HttpHeaders headers = statusError.getResponseHeaders();
+            int statusCode = statusError.getStatusCode().value();
+            if (statusCode == 429) {
+                return new RateLimitExceededException("GitHub API rate limit exceeded. Please try again later.", extractRetryAfter(headers), extractRateLimitReset(headers));
+            }
+            if (statusCode == 403) {
+                if (statusError instanceof HttpClientErrorException clientError && isRateLimitResponse(clientError)) {
+                    return new RateLimitExceededException("GitHub API rate limit exceeded. Please try again later.", extractRetryAfter(headers), extractRateLimitReset(headers));
+                }
+                return new com.gitracker.exception.GitHubForbiddenException("GitHub access to this resource is currently unavailable.");
+            }
+            if (statusCode == 404) {
+                return new ResourceNotFoundException(context + " not found");
+            }
+            if (statusCode == 401) {
+                return new com.gitracker.exception.GitHubAuthenticationException("Invalid or expired GitHub access token.");
+            }
+            if (statusCode == 422) {
+                return new com.gitracker.exception.GitHubValidationException("GitHub API unprocessable entity for " + context + ".");
+            }
+            if (statusCode >= 500) {
+                return new com.gitracker.exception.GitHubServiceUnavailableException("GitHub is temporarily unavailable. Please try again shortly.");
+            }
+        }
+        if (exception instanceof org.springframework.web.client.ResourceAccessException) {
+            return new com.gitracker.exception.GitHubServiceUnavailableException("GitHub is temporarily unavailable. Please try again shortly.", exception);
+        }
+        if (exception instanceof ResourceNotFoundException || exception instanceof RateLimitExceededException
+                || exception instanceof com.gitracker.exception.GitHubForbiddenException
+                || exception instanceof com.gitracker.exception.GitHubAuthenticationException
+                || exception instanceof com.gitracker.exception.GitHubValidationException
+                || exception instanceof com.gitracker.exception.GitHubServiceUnavailableException) {
+            return (RuntimeException) exception;
+        }
+        return new com.gitracker.exception.GitHubServiceUnavailableException("GitHub is temporarily unavailable. Please try again shortly.", exception);
+    }
+
+    private boolean isRateLimitResponse(HttpClientErrorException exception) {
+        HttpHeaders headers = exception.getResponseHeaders();
+        if (headers != null) {
+            String remaining = headers.getFirst("X-RateLimit-Remaining");
+            if ("0".equals(remaining)) {
+                return true;
+            }
+            if (headers.getFirst("Retry-After") != null || headers.getFirst("X-RateLimit-Reset") != null) {
+                return true;
+            }
+        }
+        String body = exception.getResponseBodyAsString();
+        if (body != null) {
+            String lower = body.toLowerCase();
+            if (lower.contains("rate limit") || lower.contains("secondary rate limit") || lower.contains("api rate limit exceeded")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private Long extractRetryAfter(HttpHeaders headers) {
+        if (headers == null) return null;
+        String retryAfter = headers.getFirst("Retry-After");
+        if (retryAfter != null) {
+            try {
+                return Long.parseLong(retryAfter.trim());
+            } catch (NumberFormatException ignored) {}
+        }
+        return null;
+    }
+
+    private Long extractRateLimitReset(HttpHeaders headers) {
+        if (headers == null) return null;
+        String reset = headers.getFirst("X-RateLimit-Reset");
+        if (reset != null) {
+            try {
+                return Long.parseLong(reset.trim());
+            } catch (NumberFormatException ignored) {}
+        }
+        return null;
     }
 }

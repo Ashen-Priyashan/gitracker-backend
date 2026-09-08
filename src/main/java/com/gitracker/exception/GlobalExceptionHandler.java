@@ -53,6 +53,46 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
     }
 
+    @ExceptionHandler(GitHubForbiddenException.class)
+    public ResponseEntity<ErrorResponse> handleGitHubForbidden(GitHubForbiddenException exception) {
+        ErrorResponse errorResponse = new ErrorResponse(
+                exception.getMessage(),
+                HttpStatus.FORBIDDEN.value(),
+                LocalDateTime.now()
+        );
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(errorResponse);
+    }
+
+    @ExceptionHandler(GitHubAuthenticationException.class)
+    public ResponseEntity<ErrorResponse> handleGitHubAuthentication(GitHubAuthenticationException exception) {
+        ErrorResponse errorResponse = new ErrorResponse(
+                exception.getMessage(),
+                HttpStatus.UNAUTHORIZED.value(),
+                LocalDateTime.now()
+        );
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(errorResponse);
+    }
+
+    @ExceptionHandler(GitHubValidationException.class)
+    public ResponseEntity<ErrorResponse> handleGitHubValidation(GitHubValidationException exception) {
+        ErrorResponse errorResponse = new ErrorResponse(
+                exception.getMessage(),
+                HttpStatus.BAD_REQUEST.value(),
+                LocalDateTime.now()
+        );
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+    }
+
+    @ExceptionHandler(GitHubServiceUnavailableException.class)
+    public ResponseEntity<ErrorResponse> handleGitHubServiceUnavailable(GitHubServiceUnavailableException exception) {
+        ErrorResponse errorResponse = new ErrorResponse(
+                exception.getMessage(),
+                HttpStatus.SERVICE_UNAVAILABLE.value(),
+                LocalDateTime.now()
+        );
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(errorResponse);
+    }
+
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ErrorResponse> handleIllegalArgumentException(IllegalArgumentException exception) {
         ErrorResponse errorResponse = new ErrorResponse(

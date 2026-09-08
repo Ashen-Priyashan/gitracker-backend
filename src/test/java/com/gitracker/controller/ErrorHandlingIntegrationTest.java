@@ -83,6 +83,70 @@ class ErrorHandlingIntegrationTest {
     }
 
     @Test
+    void shouldReturn403WhenGitHubForbiddenThrown() throws Exception {
+        when(gitHubUserService.getUser("forbidden-user"))
+                .thenThrow(new com.gitracker.exception.GitHubForbiddenException("GitHub access to this resource is currently unavailable."));
+
+        mockMvc.perform(get("/api/users/forbidden-user")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message")
+                        .value("GitHub access to this resource is currently unavailable."))
+                .andExpect(jsonPath("$.status")
+                        .value(403))
+                .andExpect(jsonPath("$.timestamp")
+                        .exists());
+    }
+
+    @Test
+    void shouldReturn401WhenGitHubAuthenticationThrown() throws Exception {
+        when(gitHubUserService.getUser("auth-user"))
+                .thenThrow(new com.gitracker.exception.GitHubAuthenticationException("Invalid or expired GitHub access token."));
+
+        mockMvc.perform(get("/api/users/auth-user")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message")
+                        .value("Invalid or expired GitHub access token."))
+                .andExpect(jsonPath("$.status")
+                        .value(401))
+                .andExpect(jsonPath("$.timestamp")
+                        .exists());
+    }
+
+    @Test
+    void shouldReturn400WhenGitHubValidationThrown() throws Exception {
+        when(gitHubUserService.getUser("invalid-format"))
+                .thenThrow(new com.gitracker.exception.GitHubValidationException("GitHub API unprocessable entity for user."));
+
+        mockMvc.perform(get("/api/users/invalid-format")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value("GitHub API unprocessable entity for user."))
+                .andExpect(jsonPath("$.status")
+                        .value(400))
+                .andExpect(jsonPath("$.timestamp")
+                        .exists());
+    }
+
+    @Test
+    void shouldReturn503WhenGitHubServiceUnavailableThrown() throws Exception {
+        when(gitHubUserService.getUser("unavailable-user"))
+                .thenThrow(new com.gitracker.exception.GitHubServiceUnavailableException("GitHub is temporarily unavailable. Please try again shortly."));
+
+        mockMvc.perform(get("/api/users/unavailable-user")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.message")
+                        .value("GitHub is temporarily unavailable. Please try again shortly."))
+                .andExpect(jsonPath("$.status")
+                        .value(503))
+                .andExpect(jsonPath("$.timestamp")
+                        .exists());
+    }
+
+    @Test
     void shouldReturn500WhenUnexpectedExceptionOccurs() throws Exception {
 
         when(gitHubUserService.getUser("crash-user"))

@@ -1,16 +1,13 @@
 package com.gitracker.client;
 
-import com.gitracker.dto.GitHubBranchDto;
-import com.gitracker.dto.GitHubCommitDetailDto;
-import com.gitracker.dto.GitHubCommitListDto;
-import com.gitracker.dto.GitHubReadmeDto;
-import com.gitracker.dto.GitHubRepositoryDto;
-import com.gitracker.dto.GitHubUserDto;
+import com.gitracker.dto.*;
 import com.gitracker.exception.RateLimitExceededException;
 import com.gitracker.exception.ResourceNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
@@ -360,6 +357,99 @@ public class GitHubApiClient {
                     .body(Map.class);
         } catch (Exception e) {
             return Map.of();
+        }
+    }
+
+    public GitHubContributorDto[] getContributors(String owner, String repo) {
+        try {
+            GitHubContributorDto[] contributors = restClient.get()
+                    .uri("/repos/{owner}/{repo}/contributors?per_page=100", owner, repo)
+                    .retrieve()
+                    .body(GitHubContributorDto[].class);
+
+            return contributors != null ? contributors : new GitHubContributorDto[0];
+        } catch (HttpClientErrorException.NotFound exception) {
+            throw new ResourceNotFoundException(
+                    "Repository '" + repo + "' not found for owner '" + owner + "'"
+            );
+        } catch (HttpClientErrorException.Conflict exception) {
+            return new GitHubContributorDto[0];
+        } catch (HttpClientErrorException.Forbidden exception) {
+            throw new RateLimitExceededException(
+                    "GitHub API rate limit exceeded. Please try again later."
+            );
+        }
+    }
+
+    public GitHubCommitActivityDto[] getCommitActivity(String owner, String repo) {
+        try {
+            ResponseEntity<GitHubCommitActivityDto[]> response = restClient.get()
+                    .uri("/repos/{owner}/{repo}/stats/commit_activity", owner, repo)
+                    .retrieve()
+                    .toEntity(GitHubCommitActivityDto[].class);
+
+            if (response.getStatusCode() == HttpStatus.ACCEPTED || response.getBody() == null) {
+                return null;
+            }
+            return response.getBody();
+        } catch (HttpClientErrorException.NotFound exception) {
+            throw new ResourceNotFoundException(
+                    "Repository '" + repo + "' not found for owner '" + owner + "'"
+            );
+        } catch (HttpClientErrorException.Conflict exception) {
+            return new GitHubCommitActivityDto[0];
+        } catch (HttpClientErrorException.Forbidden exception) {
+            throw new RateLimitExceededException(
+                    "GitHub API rate limit exceeded. Please try again later."
+            );
+        }
+    }
+
+    public Number[][] getCodeFrequency(String owner, String repo) {
+        try {
+            ResponseEntity<Number[][]> response = restClient.get()
+                    .uri("/repos/{owner}/{repo}/stats/code_frequency", owner, repo)
+                    .retrieve()
+                    .toEntity(Number[][].class);
+
+            if (response.getStatusCode() == HttpStatus.ACCEPTED || response.getBody() == null) {
+                return null;
+            }
+            return response.getBody();
+        } catch (HttpClientErrorException.NotFound exception) {
+            throw new ResourceNotFoundException(
+                    "Repository '" + repo + "' not found for owner '" + owner + "'"
+            );
+        } catch (HttpClientErrorException.Conflict exception) {
+            return new Number[0][0];
+        } catch (HttpClientErrorException.Forbidden exception) {
+            throw new RateLimitExceededException(
+                    "GitHub API rate limit exceeded. Please try again later."
+            );
+        }
+    }
+
+    public GitHubParticipationDto getParticipation(String owner, String repo) {
+        try {
+            ResponseEntity<GitHubParticipationDto> response = restClient.get()
+                    .uri("/repos/{owner}/{repo}/stats/participation", owner, repo)
+                    .retrieve()
+                    .toEntity(GitHubParticipationDto.class);
+
+            if (response.getStatusCode() == HttpStatus.ACCEPTED || response.getBody() == null) {
+                return null;
+            }
+            return response.getBody();
+        } catch (HttpClientErrorException.NotFound exception) {
+            throw new ResourceNotFoundException(
+                    "Repository '" + repo + "' not found for owner '" + owner + "'"
+            );
+        } catch (HttpClientErrorException.Conflict exception) {
+            return new GitHubParticipationDto(List.of(), List.of());
+        } catch (HttpClientErrorException.Forbidden exception) {
+            throw new RateLimitExceededException(
+                    "GitHub API rate limit exceeded. Please try again later."
+            );
         }
     }
 }

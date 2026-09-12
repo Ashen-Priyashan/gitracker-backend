@@ -47,7 +47,8 @@ public class TokenMigrationRunner implements ApplicationRunner {
                 logger.info("Migrated {} legacy plaintext GitHub OAuth token(s) to AES-256-GCM format.", migratedCount);
             }
         } catch (Exception e) {
-            logger.warn("Token migration check skipped or deferred: {}", e.getMessage());
+            logger.error("Token migration failed. Halting startup to prevent unencrypted token exposure.", e);
+            throw new IllegalStateException("Failed to migrate legacy plaintext tokens to encrypted format", e);
         }
     }
 }

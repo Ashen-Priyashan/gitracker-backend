@@ -28,10 +28,10 @@ public class TokenEncryptionConverter implements AttributeConverter<String, Stri
         if (attribute == null || attribute.isBlank()) {
             return attribute;
         }
-        if (encryptionService != null) {
-            return encryptionService.encrypt(attribute);
+        if (encryptionService == null) {
+            throw new IllegalStateException("Token encryption service is not configured or unavailable");
         }
-        return attribute;
+        return encryptionService.encrypt(attribute);
     }
 
     @Override
@@ -39,9 +39,9 @@ public class TokenEncryptionConverter implements AttributeConverter<String, Stri
         if (dbData == null || dbData.isBlank()) {
             return dbData;
         }
-        if (encryptionService != null) {
-            return encryptionService.decrypt(dbData);
+        if (encryptionService == null) {
+            throw new IllegalStateException("Token encryption service is not configured or unavailable");
         }
-        return dbData;
+        return encryptionService.decrypt(dbData);
     }
 }

@@ -88,4 +88,24 @@ class TokenEncryptionServiceTest {
 
         assertEquals(rawToken, entityAttr);
     }
+
+    @Test
+    void shouldFailClosedWhenConverterEncryptionServiceIsNull() {
+        TokenEncryptionConverter converter = new TokenEncryptionConverter();
+        converter.setTokenEncryptionService(null);
+
+        IllegalStateException ex1 = assertThrows(IllegalStateException.class, () ->
+                converter.convertToDatabaseColumn("ghu_sensitive_token"));
+        assertTrue(ex1.getMessage().contains("Token encryption service is not configured or unavailable"));
+
+        IllegalStateException ex2 = assertThrows(IllegalStateException.class, () ->
+                converter.convertToEntityAttribute("enc:v1:some_ciphertext"));
+        assertTrue(ex2.getMessage().contains("Token encryption service is not configured or unavailable"));
+
+        // Null and blank should still return safely without throwing
+        assertNull(converter.convertToDatabaseColumn(null));
+        assertEquals("", converter.convertToDatabaseColumn(""));
+        assertNull(converter.convertToEntityAttribute(null));
+        assertEquals("", converter.convertToEntityAttribute(""));
+    }
 }

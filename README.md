@@ -159,10 +159,11 @@ ENCRYPTION_SECRET_KEY=your_secure_32_character_encryption_key_here!
 ## Database Migrations (Flyway)
 
 Database schema migrations are managed automatically by Flyway in `src/main/resources/db/migration/`.
-- `V1__initial_schema.sql`: Establishes initial PostgreSQL tables (users, github_users, repositories, user_analytics, repository_analytics, language_analytics) and indexes.
-- `V2__developer_intelligence_schema.sql`: Adds developer score tracking, commits, issues, and pull request intelligence tables.
-- `V3__deduplicate_github_users_and_case_insensitive_index.sql`: Deduplicates GitHub users, reconciles repository relationships, preserves topics, and creates case-insensitive username indexes.
-- `V4__commit_repository_scoped_identity_and_github_created_at.sql`: Scopes commit identity to (repository_id, sha) and adds github_created_at.
+- `V1__initial_schema.sql`: Establishes initial PostgreSQL tables (users, github_users, repositories, user_analytics, repository_analytics, language_analytics, commits, issues, pull_requests, developer_scores) and indexes.
+- `V2__sync_users_columns.sql`: Synchronizes users table columns and unique email index for authentication.
+- `V3__deduplicate_github_users_and_case_insensitive_index.sql`: Deduplicates GitHub users, reconciles repository relationships, preserves topics, consolidates commits/issues/PRs/languages, and creates case-insensitive username index.
+- `V4__commit_repository_scoped_identity_and_github_created_at.sql`: Scopes commit identity to composite unique constraint (repository_id, sha) and adds github_created_at.
+- `V5__reconcile_developer_scores_schema.sql`: Reconciles developer_scores schema to align with application entity model (user_id referencing users.id).
 - In production (`prod` profile), Hibernate DDL is set to `validate`, ensuring no unverified schema modifications occur.
 
 ## Configuration

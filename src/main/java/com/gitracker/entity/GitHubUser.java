@@ -40,6 +40,8 @@ public class GitHubUser {
 
     private LocalDateTime updatedAt;
 
+    private LocalDateTime githubCreatedAt;
+
     @PrePersist
     public void prePersist() {
         createdAt = LocalDateTime.now();

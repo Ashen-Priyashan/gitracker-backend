@@ -59,10 +59,10 @@ public class GitHubUserService {
                         user.getName(),
                         user.getBio(),
                         null,
-                        user.getFollowers(),
-                        user.getFollowing(),
+                        user.getFollowers() != null ? user.getFollowers() : 0,
+                        user.getFollowing() != null ? user.getFollowing() : 0,
                         user.getAvatarUrl(),
-                        user.getCreatedAt() != null ? user.getCreatedAt().toString() : null
+                        user.getGithubCreatedAt() != null ? user.getGithubCreatedAt().toString() : null
                 );
             }
 
@@ -74,6 +74,7 @@ public class GitHubUserService {
                 user.setFollowers(freshUser.followers());
                 user.setFollowing(freshUser.following());
                 user.setPublicRepos(freshUser.publicRepos());
+                user.setGithubCreatedAt(parseIsoDateTime(freshUser.createdAt()));
                 user.setUpdatedAt(LocalDateTime.now());
                 gitHubUserRepository.save(user);
 
@@ -94,10 +95,10 @@ public class GitHubUserService {
                         user.getName(),
                         user.getBio(),
                         null,
-                        user.getFollowers(),
-                        user.getFollowing(),
+                        user.getFollowers() != null ? user.getFollowers() : 0,
+                        user.getFollowing() != null ? user.getFollowing() : 0,
                         user.getAvatarUrl(),
-                        user.getCreatedAt() != null ? user.getCreatedAt().toString() : null
+                        user.getGithubCreatedAt() != null ? user.getGithubCreatedAt().toString() : null
                 );
             }
         }
@@ -113,6 +114,7 @@ public class GitHubUserService {
                 .followers(user.followers())
                 .following(user.following())
                 .publicRepos(user.publicRepos())
+                .githubCreatedAt(parseIsoDateTime(user.createdAt()))
                 .build();
 
         gitHubUserRepository.save(githubUser);
@@ -127,5 +129,20 @@ public class GitHubUserService {
                 user.avatarUrl(),
                 user.createdAt()
         );
+    }
+
+    private LocalDateTime parseIsoDateTime(String dateTimeStr) {
+        if (dateTimeStr == null || dateTimeStr.isBlank()) {
+            return null;
+        }
+        try {
+            return java.time.Instant.parse(dateTimeStr).atZone(java.time.ZoneOffset.UTC).toLocalDateTime();
+        } catch (Exception e) {
+            try {
+                return LocalDateTime.parse(dateTimeStr);
+            } catch (Exception ex) {
+                return null;
+            }
+        }
     }
 }

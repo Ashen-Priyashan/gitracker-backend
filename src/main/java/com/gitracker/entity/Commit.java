@@ -6,7 +6,9 @@ import lombok.*;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "commits")
+@Table(name = "commits", uniqueConstraints = {
+        @UniqueConstraint(name = "uk_commits_repository_sha", columnNames = {"repository_id", "sha"})
+})
 @Getter
 @Setter
 @NoArgsConstructor
@@ -18,7 +20,7 @@ public class Commit {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false)
     private String sha;
 
     @Column(length = 2048)

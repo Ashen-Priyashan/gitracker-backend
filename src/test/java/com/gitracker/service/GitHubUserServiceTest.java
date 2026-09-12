@@ -59,9 +59,35 @@ class GitHubUserServiceTest {
         // Assert
         assertEquals("octocat", response.username());
         assertEquals("The Octocat", response.name());
+        assertNull(response.createdAt(), "Legacy users without stored githubCreatedAt should have null createdAt in response");
 
         verify(gitHubApiClient, never()).getUser(anyString());
         verify(gitHubUserRepository, never()).save(any());
+    }
+
+    @Test
+    void shouldReturnCachedUserWithStoredGithubCreatedAt() {
+        // Arrange
+        GitHubUser user = GitHubUser.builder()
+                .githubId(583231L)
+                .username("octocat")
+                .name("The Octocat")
+                .followers(100)
+                .following(10)
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
+                .githubCreatedAt(LocalDateTime.of(2020, 5, 1, 12, 0))
+                .build();
+
+        when(gitHubUserRepository.findByUsernameIgnoreCase("octocat"))
+                .thenReturn(Optional.of(user));
+
+        // Act
+        GitHubUserResponse response = gitHubUserService.getUser("octocat");
+
+        // Assert
+        assertEquals("octocat", response.username());
+        assertEquals("2020-05-01T12:00", response.createdAt());
     }
 
     @Test

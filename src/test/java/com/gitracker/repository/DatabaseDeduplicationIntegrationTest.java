@@ -59,7 +59,6 @@ class DatabaseDeduplicationIntegrationTest {
                 new ClassPathResource("db/migration/V2__sync_users_columns.sql")
         );
         initPopulator.execute(dataSource);
-        jdbcTemplate.execute("ALTER TABLE developer_scores ADD COLUMN IF NOT EXISTS user_id BIGINT REFERENCES users(id);");
     }
 
     @Test
@@ -149,12 +148,13 @@ class DatabaseDeduplicationIntegrationTest {
             jdbcTemplate.update("INSERT INTO user_analytics (github_user_id, total_repositories, total_stars, total_forks, most_used_language, calculated_at) VALUES (?, ?, ?, ?, ?, ?)",
                     u2Id, 2, 15, 3, "TypeScript", java.sql.Timestamp.valueOf(LocalDateTime.now()));
 
-            // 9. Insert application user in users table and developer_scores referencing users(id)
-            jdbcTemplate.update("INSERT INTO users (name, email, password) VALUES (?, ?, ?)", "Dev User", "dev@example.com", "secretHash");
+            // 9. Insert application user in users table and developer_scores in legacy V1 schema referencing github_users
+            jdbcTemplate.update("INSERT INTO users (name, email, password, github_username) VALUES (?, ?, ?, ?)",
+                    "Dev User", "dev@example.com", "secretHash", "ashen-priyashan");
             Long appUserId = jdbcTemplate.queryForObject("SELECT id FROM users WHERE email = ?", Long.class, "dev@example.com");
             localUserId[0] = appUserId;
-            jdbcTemplate.update("INSERT INTO developer_scores (user_id, activity_score, quality_score, calculated_at) VALUES (?, ?, ?, ?)",
-                    appUserId, 90.0, 80.0, LocalDateTime.now());
+            jdbcTemplate.update("INSERT INTO developer_scores (github_user_id, activity_score, quality_score, calculated_at) VALUES (?, ?, ?, ?)",
+                    u1Id, 90.0, 80.0, LocalDateTime.now());
 
             return null;
         });
@@ -233,19 +233,25 @@ class DatabaseDeduplicationIntegrationTest {
                 "SELECT total_stars FROM user_analytics WHERE github_user_id = ?", Integer.class, survivingUserId);
         assertEquals(15, latestStars, "Latest analytics values should be preserved");
 
-        // 16. Verify developer_scores is intact and still references users(id), not touched by github_users mapping
+        // 16. Execute the actual Flyway V4 migration SQL file (adds github_created_at, composite sha index)
+        ResourceDatabasePopulator populatorV4 = new ResourceDatabasePopulator(
+                new ClassPathResource("db/migration/V4__commit_repository_scoped_identity_and_github_created_at.sql")
+        );
+        populatorV4.execute(dataSource);
+
+        // 17. Execute the actual Flyway V5 migration SQL file (reconciles developer_scores to users table)
+        ResourceDatabasePopulator populatorV5 = new ResourceDatabasePopulator(
+                new ClassPathResource("db/migration/V5__reconcile_developer_scores_schema.sql")
+        );
+        populatorV5.execute(dataSource);
+
+        // Verify developer_scores was migrated to reference users(id) and legacy column was removed
         Integer devScoreCount = jdbcTemplate.queryForObject(
                 "SELECT count(*) FROM developer_scores WHERE user_id = ?",
                 Integer.class,
                 localUserId[0]
         );
-        assertEquals(1, devScoreCount, "developer_scores must maintain its valid relationship to users table");
-
-        // 17. Execute the actual Flyway V4 migration SQL file (adds github_created_at, composite sha index)
-        ResourceDatabasePopulator populatorV4 = new ResourceDatabasePopulator(
-                new ClassPathResource("db/migration/V4__commit_repository_scoped_identity_and_github_created_at.sql")
-        );
-        populatorV4.execute(dataSource);
+        assertEquals(1, devScoreCount, "developer_scores must be successfully reconciled to users table via V5");
 
         // Verify entity repositories can now read the migrated records via JPA
         List<GitHubUser> jpaUsers = gitHubUserRepository.findAll();
@@ -322,7 +328,8 @@ class DatabaseDeduplicationIntegrationTest {
                 new ClassPathResource("db/migration/V1__initial_schema.sql"),
                 new ClassPathResource("db/migration/V2__sync_users_columns.sql"),
                 new ClassPathResource("db/migration/V3__deduplicate_github_users_and_case_insensitive_index.sql"),
-                new ClassPathResource("db/migration/V4__commit_repository_scoped_identity_and_github_created_at.sql")
+                new ClassPathResource("db/migration/V4__commit_repository_scoped_identity_and_github_created_at.sql"),
+                new ClassPathResource("db/migration/V5__reconcile_developer_scores_schema.sql")
         );
         assertDoesNotThrow(() -> populator.execute(dataSource), "All Flyway migrations must execute cleanly from scratch");
 
@@ -339,11 +346,18 @@ class DatabaseDeduplicationIntegrationTest {
                 Integer.class
         );
         assertEquals(1, colCount, "github_created_at column must exist");
+
+        // Verify developer_scores user_id column exists
+        Integer devScoreUserCol = jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'developer_scores' AND column_name = 'user_id'",
+                Integer.class
+        );
+        assertEquals(1, devScoreUserCol, "developer_scores user_id column must exist");
     }
 
     @Test
-    void shouldPreserveExistingDataWhenMigratingExistingDatabase() {
-        // Setup initial schema and seed a single user with repositories and analytics (similar to current dev DB)
+    void shouldPreserveExistingDataWhenMigratingLegacyV1V2Schema() {
+        // Setup initial schema and seed a single user with repositories and analytics
         jdbcTemplate.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public;");
         new ResourceDatabasePopulator(
                 new ClassPathResource("db/migration/V1__initial_schema.sql"),
@@ -357,18 +371,227 @@ class DatabaseDeduplicationIntegrationTest {
         jdbcTemplate.update("INSERT INTO commits (sha, message, repository_id) VALUES (?, ?, ?)", "abc123sha", "first commit", repoId);
         jdbcTemplate.update("INSERT INTO user_analytics (github_user_id, total_stars, calculated_at) VALUES (?, ?, ?)", userId, 10, LocalDateTime.now());
 
-        // Run V3 and V4
+        // Run V3, V4, and V5
         ResourceDatabasePopulator populator = new ResourceDatabasePopulator(
                 new ClassPathResource("db/migration/V3__deduplicate_github_users_and_case_insensitive_index.sql"),
-                new ClassPathResource("db/migration/V4__commit_repository_scoped_identity_and_github_created_at.sql")
+                new ClassPathResource("db/migration/V4__commit_repository_scoped_identity_and_github_created_at.sql"),
+                new ClassPathResource("db/migration/V5__reconcile_developer_scores_schema.sql")
         );
-        assertDoesNotThrow(() -> populator.execute(dataSource), "Existing valid database must migrate smoothly without error");
+        assertDoesNotThrow(() -> populator.execute(dataSource), "Legacy V1/V2 database must migrate smoothly without error");
 
         // Assert all data remains intact
         assertEquals(1, jdbcTemplate.queryForObject("SELECT count(*) FROM github_users", Integer.class));
         assertEquals(1, jdbcTemplate.queryForObject("SELECT count(*) FROM repositories", Integer.class));
         assertEquals(1, jdbcTemplate.queryForObject("SELECT count(*) FROM commits", Integer.class));
         assertEquals(1, jdbcTemplate.queryForObject("SELECT count(*) FROM user_analytics", Integer.class));
+    }
+
+    @Test
+    void shouldHandleDuplicateCommitShaCollisionWhenRepositoriesAreMerged() {
+        jdbcTemplate.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public;");
+        new ResourceDatabasePopulator(
+                new ClassPathResource("db/migration/V1__initial_schema.sql"),
+                new ClassPathResource("db/migration/V2__sync_users_columns.sql")
+        ).execute(dataSource);
+
+        jdbcTemplate.update("INSERT INTO github_users (github_id, username, name) VALUES (?, ?, ?)", 100L, "octocat", "The Octocat");
+        Long userId = jdbcTemplate.queryForObject("SELECT id FROM github_users WHERE username = 'octocat'", Long.class);
+
+        // Repo A (canonical) and Repo B (duplicate) representing same GitHub repo 12345
+        Long repoA = jdbcTemplate.queryForObject(
+                "INSERT INTO repositories (repo_id, name, github_user_id) VALUES (?, ?, ?) RETURNING id",
+                Long.class, 12345L, "shared-repo", userId);
+        Long repoB = jdbcTemplate.queryForObject(
+                "INSERT INTO repositories (repo_id, name, github_user_id) VALUES (?, ?, ?) RETURNING id",
+                Long.class, 12345L, "shared-repo", userId);
+
+        // Both repos have commit with identical SHA 'sha-abc123'
+        jdbcTemplate.update("INSERT INTO commits (sha, message, repository_id) VALUES (?, ?, ?)", "sha-abc123", "commit in repo A", repoA);
+        jdbcTemplate.update("INSERT INTO commits (sha, message, repository_id) VALUES (?, ?, ?)", "sha-abc123", "identical commit in repo B", repoB);
+
+        // Also add unique commits in both
+        jdbcTemplate.update("INSERT INTO commits (sha, message, repository_id) VALUES (?, ?, ?)", "sha-unique-A", "unique commit A", repoA);
+        jdbcTemplate.update("INSERT INTO commits (sha, message, repository_id) VALUES (?, ?, ?)", "sha-unique-B", "unique commit B", repoB);
+
+        // Run V3 (merges repo B into repo A and consolidates duplicate SHA commits)
+        ResourceDatabasePopulator populatorV3 = new ResourceDatabasePopulator(
+                new ClassPathResource("db/migration/V3__deduplicate_github_users_and_case_insensitive_index.sql")
+        );
+        assertDoesNotThrow(() -> populatorV3.execute(dataSource), "V3 must execute cleanly when duplicate repos share commit SHAs");
+
+        // Verify only Repo A survives
+        assertEquals(1, jdbcTemplate.queryForObject("SELECT count(*) FROM repositories", Integer.class));
+        assertEquals(repoA, jdbcTemplate.queryForObject("SELECT id FROM repositories", Long.class));
+
+        // Verify commits in Repo A: exactly 3 commits (sha-abc123 consolidated, sha-unique-A, sha-unique-B)
+        assertEquals(3, jdbcTemplate.queryForObject("SELECT count(*) FROM commits WHERE repository_id = ?", Integer.class, repoA));
+        assertEquals(1, jdbcTemplate.queryForObject("SELECT count(*) FROM commits WHERE repository_id = ? AND sha = 'sha-abc123'", Integer.class, repoA));
+
+        // Run V4 (enforces UNIQUE(repository_id, sha))
+        ResourceDatabasePopulator populatorV4 = new ResourceDatabasePopulator(
+                new ClassPathResource("db/migration/V4__commit_repository_scoped_identity_and_github_created_at.sql")
+        );
+        assertDoesNotThrow(() -> populatorV4.execute(dataSource), "V4 unique constraint must succeed following commit deduplication");
+    }
+
+    @Test
+    void shouldTransitionFromHibernateGeneratedSchema() {
+        jdbcTemplate.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public;");
+
+        // Create the exact schema generated by Hibernate in development
+        jdbcTemplate.execute("""
+            CREATE TABLE users (
+                id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+                created_at TIMESTAMP(6) WITHOUT TIME ZONE,
+                email VARCHAR(255) NOT NULL UNIQUE,
+                github_username VARCHAR(255),
+                name VARCHAR(255) NOT NULL,
+                password VARCHAR(255) NOT NULL,
+                updated_at TIMESTAMP(6) WITHOUT TIME ZONE,
+                github_connection_id BIGINT
+            );
+
+            CREATE TABLE github_users (
+                id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+                avatar_url VARCHAR(255),
+                bio TEXT,
+                created_at TIMESTAMP(6) WITHOUT TIME ZONE,
+                followers INTEGER,
+                following INTEGER,
+                github_id BIGINT,
+                name VARCHAR(255),
+                public_repos INTEGER,
+                updated_at TIMESTAMP(6) WITHOUT TIME ZONE,
+                username VARCHAR(255) NOT NULL,
+                CONSTRAINT uk_github_users_username UNIQUE (username)
+            );
+
+            CREATE TABLE repositories (
+                id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+                archived BOOLEAN,
+                created_at TIMESTAMP(6) WITHOUT TIME ZONE,
+                default_branch VARCHAR(255),
+                description TEXT,
+                forks INTEGER,
+                html_url VARCHAR(255),
+                language VARCHAR(255),
+                license_name VARCHAR(255),
+                name VARCHAR(255),
+                open_issues INTEGER,
+                repo_id BIGINT,
+                size INTEGER,
+                stars INTEGER,
+                updated_at TIMESTAMP(6) WITHOUT TIME ZONE,
+                watchers INTEGER,
+                github_user_id BIGINT REFERENCES github_users(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE repository_topics (
+                repository_id BIGINT NOT NULL REFERENCES repositories(id) ON DELETE CASCADE,
+                topic VARCHAR(255)
+            );
+
+            CREATE TABLE commits (
+                id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+                additions INTEGER,
+                author_email VARCHAR(255),
+                author_name VARCHAR(255),
+                committed_at TIMESTAMP(6) WITHOUT TIME ZONE,
+                deletions INTEGER,
+                message TEXT,
+                sha VARCHAR(255),
+                repository_id BIGINT REFERENCES repositories(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE issues (
+                id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+                closed_at TIMESTAMP(6) WITHOUT TIME ZONE,
+                created_at TIMESTAMP(6) WITHOUT TIME ZONE,
+                issue_number BIGINT,
+                state VARCHAR(255),
+                title VARCHAR(1024),
+                repository_id BIGINT REFERENCES repositories(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE pull_requests (
+                id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+                closed_at TIMESTAMP(6) WITHOUT TIME ZONE,
+                created_at TIMESTAMP(6) WITHOUT TIME ZONE,
+                pr_number BIGINT,
+                state VARCHAR(255),
+                title VARCHAR(1024),
+                repository_id BIGINT REFERENCES repositories(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE language_statistics (
+                id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+                bytes BIGINT,
+                language VARCHAR(255),
+                repository_id BIGINT REFERENCES repositories(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE user_analytics (
+                id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+                calculated_at TIMESTAMP(6) WITHOUT TIME ZONE,
+                most_used_language VARCHAR(255),
+                total_forks INTEGER,
+                total_repositories INTEGER,
+                total_stars INTEGER,
+                github_user_id BIGINT UNIQUE REFERENCES github_users(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE developer_scores (
+                id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+                activity_score INTEGER,
+                calculated_at TIMESTAMP(6) WITHOUT TIME ZONE,
+                collaboration_score INTEGER,
+                consistency_score INTEGER,
+                diversity_score INTEGER,
+                quality_score INTEGER,
+                total_score INTEGER,
+                user_id BIGINT UNIQUE REFERENCES users(id)
+            );
+        """);
+
+        // Seed data into Hibernate-generated tables (matching realistic development state)
+        jdbcTemplate.update("INSERT INTO users (name, email, password, github_username) VALUES (?, ?, ?, ?)",
+                "Real User", "real@example.com", "pass123", "octocat");
+        Long userId = jdbcTemplate.queryForObject("SELECT id FROM users WHERE email = 'real@example.com'", Long.class);
+
+        jdbcTemplate.update("INSERT INTO github_users (github_id, username, name) VALUES (?, ?, ?)", 583231L, "octocat", "The Octocat");
+        Long ghUserId = jdbcTemplate.queryForObject("SELECT id FROM github_users WHERE username = 'octocat'", Long.class);
+
+        jdbcTemplate.update("INSERT INTO repositories (repo_id, name, github_user_id, stars) VALUES (?, ?, ?, ?)",
+                12345L, "gitracker", ghUserId, 42);
+        Long repoId = jdbcTemplate.queryForObject("SELECT id FROM repositories WHERE name = 'gitracker'", Long.class);
+
+        jdbcTemplate.update("INSERT INTO commits (sha, message, repository_id) VALUES (?, ?, ?)", "initial-sha-001", "init commit", repoId);
+        jdbcTemplate.update("INSERT INTO developer_scores (user_id, total_score, activity_score) VALUES (?, ?, ?)", userId, 85, 90);
+
+        // Run V3, V4, and V5 against the Hibernate-generated schema
+        ResourceDatabasePopulator populator = new ResourceDatabasePopulator(
+                new ClassPathResource("db/migration/V3__deduplicate_github_users_and_case_insensitive_index.sql"),
+                new ClassPathResource("db/migration/V4__commit_repository_scoped_identity_and_github_created_at.sql"),
+                new ClassPathResource("db/migration/V5__reconcile_developer_scores_schema.sql")
+        );
+        assertDoesNotThrow(() -> populator.execute(dataSource), "Hibernate-generated schema must migrate smoothly with V3, V4, and V5");
+
+        // Verify existing records are intact
+        assertEquals(1, jdbcTemplate.queryForObject("SELECT count(*) FROM github_users", Integer.class));
+        assertEquals(1, jdbcTemplate.queryForObject("SELECT count(*) FROM repositories", Integer.class));
+        assertEquals(1, jdbcTemplate.queryForObject("SELECT count(*) FROM commits", Integer.class));
+        assertEquals(1, jdbcTemplate.queryForObject("SELECT count(*) FROM developer_scores WHERE user_id = ?", Integer.class, userId));
+
+        // Verify new columns/indexes exist
+        Integer ghCol = jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'github_users' AND column_name = 'github_created_at'",
+                Integer.class);
+        assertEquals(1, ghCol, "github_created_at must exist after migration");
+
+        Integer commitIndex = jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM pg_indexes WHERE tablename = 'commits' AND indexname = 'uk_commits_repository_sha'",
+                Integer.class);
+        assertEquals(1, commitIndex, "uk_commits_repository_sha index must exist");
     }
 }
 

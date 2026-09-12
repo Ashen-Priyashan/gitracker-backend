@@ -17,13 +17,16 @@ DROP INDEX IF EXISTS uk_commits_sha;
 DROP INDEX IF EXISTS uk9hdymug1w8yf7uqi6fh8nftfd;
 DROP INDEX IF EXISTS commits_sha_key;
 
--- 4. Create composite unique index on (repository_id, sha)
+-- 4. Defensively deduplicate any pre-existing duplicate (repository_id, sha) commits
+DELETE FROM commits
+WHERE id IN (
+    SELECT id FROM (
+        SELECT id, ROW_NUMBER() OVER (PARTITION BY repository_id, sha ORDER BY id ASC) as rn
+        FROM commits
+        WHERE sha IS NOT NULL
+    ) dup
+    WHERE dup.rn > 1
+);
+
+-- 5. Create composite unique index on (repository_id, sha)
 CREATE UNIQUE INDEX IF NOT EXISTS uk_commits_repository_sha ON commits (repository_id, sha);
-
--- 5. Ensure developer_scores columns align with application entity model
-ALTER TABLE developer_scores ADD COLUMN IF NOT EXISTS user_id BIGINT;
-ALTER TABLE developer_scores ADD COLUMN IF NOT EXISTS total_score INTEGER;
-ALTER TABLE developer_scores ADD COLUMN IF NOT EXISTS consistency_score INTEGER;
-ALTER TABLE developer_scores ADD COLUMN IF NOT EXISTS collaboration_score INTEGER;
-ALTER TABLE developer_scores ADD COLUMN IF NOT EXISTS diversity_score INTEGER;
-

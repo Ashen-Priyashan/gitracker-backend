@@ -39,17 +39,71 @@ FROM repositories
 WHERE repo_id IS NOT NULL;
 
 -- 5. Repoint child tables of repositories
+-- Commit deduplication: remove duplicate commits from old repository if canonical repository already has the same SHA
+DELETE FROM commits c_old
+WHERE c_old.repository_id IN (SELECT old_id FROM repo_dedup_map WHERE old_id <> new_id)
+  AND c_old.sha IS NOT NULL
+  AND EXISTS (
+      SELECT 1 FROM commits c_canon
+      JOIN repo_dedup_map r ON r.new_id = c_canon.repository_id
+      WHERE r.old_id = c_old.repository_id
+        AND c_canon.sha = c_old.sha
+  );
+
 UPDATE commits
 SET repository_id = (SELECT r.new_id FROM repo_dedup_map r WHERE r.old_id = commits.repository_id)
 WHERE repository_id IN (SELECT old_id FROM repo_dedup_map WHERE old_id <> new_id);
+
+-- If multiple commits with the same (repository_id, sha) exist, retain lowest id
+DELETE FROM commits
+WHERE id IN (
+    SELECT id FROM (
+        SELECT id, ROW_NUMBER() OVER (PARTITION BY repository_id, sha ORDER BY id ASC) as rn
+        FROM commits
+        WHERE sha IS NOT NULL
+    ) sub
+    WHERE sub.rn > 1
+);
+
+-- Issue deduplication
+DELETE FROM issues i_old
+WHERE i_old.repository_id IN (SELECT old_id FROM repo_dedup_map WHERE old_id <> new_id)
+  AND i_old.issue_number IS NOT NULL
+  AND EXISTS (
+      SELECT 1 FROM issues i_canon
+      JOIN repo_dedup_map r ON r.new_id = i_canon.repository_id
+      WHERE r.old_id = i_old.repository_id
+        AND i_canon.issue_number = i_old.issue_number
+  );
 
 UPDATE issues
 SET repository_id = (SELECT r.new_id FROM repo_dedup_map r WHERE r.old_id = issues.repository_id)
 WHERE repository_id IN (SELECT old_id FROM repo_dedup_map WHERE old_id <> new_id);
 
+-- Pull request deduplication
+DELETE FROM pull_requests pr_old
+WHERE pr_old.repository_id IN (SELECT old_id FROM repo_dedup_map WHERE old_id <> new_id)
+  AND pr_old.pr_number IS NOT NULL
+  AND EXISTS (
+      SELECT 1 FROM pull_requests pr_canon
+      JOIN repo_dedup_map r ON r.new_id = pr_canon.repository_id
+      WHERE r.old_id = pr_old.repository_id
+        AND pr_canon.pr_number = pr_old.pr_number
+  );
+
 UPDATE pull_requests
 SET repository_id = (SELECT r.new_id FROM repo_dedup_map r WHERE r.old_id = pull_requests.repository_id)
 WHERE repository_id IN (SELECT old_id FROM repo_dedup_map WHERE old_id <> new_id);
+
+-- Language statistics deduplication
+DELETE FROM language_statistics ls_old
+WHERE ls_old.repository_id IN (SELECT old_id FROM repo_dedup_map WHERE old_id <> new_id)
+  AND EXISTS (
+      SELECT 1 FROM language_statistics ls_canon
+      JOIN repo_dedup_map r ON r.new_id = ls_canon.repository_id
+      WHERE r.old_id = ls_old.repository_id
+        AND ls_canon.language = ls_old.language
+  );
 
 UPDATE language_statistics
 SET repository_id = (SELECT r.new_id FROM repo_dedup_map r WHERE r.old_id = language_statistics.repository_id)

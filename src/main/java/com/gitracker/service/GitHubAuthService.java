@@ -68,10 +68,13 @@ public class GitHubAuthService {
         String state = UUID.randomUUID().toString();
         session.setAttribute(STATE_SESSION_KEY, state);
 
-        return "https://github.com/login/oauth/authorize" +
-                "?client_id=" + clientId +
-                "&redirect_uri=" + redirectUri +
-                "&state=" + state;
+        return org.springframework.web.util.UriComponentsBuilder
+                .fromUriString("https://github.com/login/oauth/authorize")
+                .queryParam("client_id", clientId)
+                .queryParam("redirect_uri", redirectUri)
+                .queryParam("state", state)
+                .encode()
+                .toUriString();
     }
 
     @SuppressWarnings("unchecked")

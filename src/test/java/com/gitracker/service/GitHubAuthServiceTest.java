@@ -52,8 +52,28 @@ class GitHubAuthServiceTest {
 
         assertNotNull(url);
         assertTrue(url.contains("client_id=test-client-id"));
-        assertTrue(url.contains("redirect_uri=http://localhost:8080/api/github/callback"));
+        assertTrue(url.contains("redirect_uri="));
         assertNotNull(session.getAttribute("GITHUB_OAUTH_STATE"));
+    }
+
+    @Test
+    void shouldEncodeSpecialCharactersInRedirectUri() {
+        GitHubAuthService serviceWithSpecialChars = new GitHubAuthService(
+                "client-123",
+                "secret",
+                "http://localhost:8080/api/callback?param=1&foo=bar:baz",
+                "http://localhost:5173",
+                gitHubApiClient,
+                connectionRepository,
+                userRepository
+        );
+        MockHttpSession session = new MockHttpSession();
+        String url = serviceWithSpecialChars.generateAuthorizationUrl(session);
+
+        assertNotNull(url);
+        assertTrue(url.startsWith("https://github.com/login/oauth/authorize?client_id=client-123&redirect_uri="));
+        // Verify query separators within the redirect_uri value were encoded and not treated as outer query separators
+        assertFalse(url.contains("?param=1&foo="), "Query params inside redirect_uri must be URL-encoded");
     }
 
     @Test

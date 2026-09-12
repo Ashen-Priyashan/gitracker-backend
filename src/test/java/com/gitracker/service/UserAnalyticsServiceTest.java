@@ -187,6 +187,10 @@ class UserAnalyticsServiceTest {
 
         UserAnalytics existingAnalytics = UserAnalytics.builder()
                 .githubUser(user)
+                .totalRepositories(4)
+                .totalStars(100)
+                .totalForks(20)
+                .mostUsedLanguage("Java")
                 .build();
 
         when(gitHubUserRepository.findByUsernameIgnoreCase("octocat"))
@@ -207,6 +211,10 @@ class UserAnalyticsServiceTest {
 
         // Assert
         assertSame(existingAnalytics, analytics);
+        assertEquals(0, analytics.getTotalRepositories(), "Repositories count should be reset to 0");
+        assertEquals(0, analytics.getTotalStars(), "Stars should be reset to 0");
+        assertEquals(0, analytics.getTotalForks(), "Forks should be reset to 0");
+        assertEquals("Unknown", analytics.getMostUsedLanguage(), "Language should be reset to Unknown");
 
         verify(userAnalyticsRepository).save(existingAnalytics);
     }

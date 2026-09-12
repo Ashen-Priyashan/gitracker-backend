@@ -442,4 +442,52 @@ class GitHubRepositoryServiceTest {
         assertEquals("cached-repo", response.getFirst().name());
         assertEquals(50, response.getFirst().stars());
     }
+
+    @Test
+    void shouldDecodeReadmeSuccessfully() {
+        String markdown = "# Hello World\nWelcome to Gitracker.";
+        String base64Content = java.util.Base64.getEncoder().encodeToString(markdown.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        GitHubReadmeDto readmeDto = new GitHubReadmeDto(
+                "README.md", "README.md", "base64", base64Content,
+                "https://github.com/octocat/gitracker/blob/main/README.md"
+        );
+
+        when(gitHubApiClient.getReadme("octocat", "gitracker")).thenReturn(readmeDto);
+
+        ReadmeResponse response = gitHubRepositoryService.getReadme("octocat", "gitracker");
+
+        assertNotNull(response);
+        assertEquals(markdown, response.content());
+        assertEquals("https://github.com/octocat/gitracker/blob/main/README.md", response.htmlUrl());
+        assertTrue(response.exists());
+    }
+
+    @Test
+    void shouldReturnIsDecodedFalseWhenReadmeContentCannotBeDecoded() {
+        GitHubReadmeDto invalidBase64Readme = new GitHubReadmeDto(
+                "README.md", "README.md", "base64", "!!!InvalidBase64Content!!!",
+                "https://github.com/octocat/gitracker/blob/main/README.md"
+        );
+
+        when(gitHubApiClient.getReadme("octocat", "gitracker")).thenReturn(invalidBase64Readme);
+
+        ReadmeResponse response = gitHubRepositoryService.getReadme("octocat", "gitracker");
+
+        assertNotNull(response);
+        assertNull(response.content(), "Content should be null when decoding fails");
+        assertEquals("https://github.com/octocat/gitracker/blob/main/README.md", response.htmlUrl());
+        assertFalse(response.exists(), "exists must be false when decoding fails");
+    }
+
+    @Test
+    void shouldHandleNullReadmeSafely() {
+        when(gitHubApiClient.getReadme("octocat", "gitracker")).thenReturn(null);
+
+        ReadmeResponse response = gitHubRepositoryService.getReadme("octocat", "gitracker");
+
+        assertNotNull(response);
+        assertNull(response.content());
+        assertNull(response.htmlUrl());
+        assertFalse(response.exists());
+    }
 }

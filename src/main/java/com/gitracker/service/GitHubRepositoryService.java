@@ -210,7 +210,7 @@ public class GitHubRepositoryService {
             return new ReadmeResponse(decodedText, readmeDto.htmlUrl(), true);
 
         } catch (IllegalArgumentException e) {
-            return new ReadmeResponse(readmeDto.content(), readmeDto.htmlUrl(), true);
+            return new ReadmeResponse(null, readmeDto.htmlUrl(), false);
         }
     }
 

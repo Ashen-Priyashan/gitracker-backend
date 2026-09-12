@@ -5,11 +5,18 @@ import com.gitracker.dto.GitHubUserDto;
 import com.gitracker.dto.GitHubUserResponse;
 import com.gitracker.entity.GitHubUser;
 import com.gitracker.repository.GitHubUserRepository;
+import com.gitracker.exception.GitHubAuthenticationException;
+import com.gitracker.exception.GitHubForbiddenException;
+import com.gitracker.exception.GitHubServiceUnavailableException;
+import com.gitracker.exception.GitHubValidationException;
+import com.gitracker.exception.RateLimitExceededException;
+import com.gitracker.exception.ResourceNotFoundException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.web.client.ResourceAccessException;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -31,6 +38,20 @@ class GitHubUserServiceTest {
     @BeforeEach
     void setUp() {
         gitHubUserService = new GitHubUserService(gitHubApiClient, gitHubUserRepository, 15L);
+    }
+
+    private GitHubUser createStaleUser() {
+        return GitHubUser.builder()
+                .githubId(583231L)
+                .username("octocat")
+                .name("Old Name")
+                .bio("Old Bio")
+                .avatarUrl("https://avatars.githubusercontent.com/u/583231?v=4")
+                .followers(50)
+                .following(5)
+                .publicRepos(4)
+                .updatedAt(LocalDateTime.now().minusMinutes(30))
+                .build();
     }
 
     @Test
@@ -129,17 +150,7 @@ class GitHubUserServiceTest {
     void shouldRefreshStaleUserFromGitHub() {
 
         // Arrange: user was last updated 30 minutes ago (stale against 15m default TTL)
-        GitHubUser staleUser = GitHubUser.builder()
-                .githubId(583231L)
-                .username("octocat")
-                .name("Old Name")
-                .bio("Old Bio")
-                .avatarUrl("https://avatars.githubusercontent.com/u/583231?v=4")
-                .followers(50)
-                .following(5)
-                .publicRepos(4)
-                .updatedAt(LocalDateTime.now().minusMinutes(30))
-                .build();
+        GitHubUser staleUser = createStaleUser();
 
         GitHubUserDto freshDto = new GitHubUserDto(
                 583231L,
@@ -175,35 +186,99 @@ class GitHubUserServiceTest {
     }
 
     @Test
-    void shouldFallbackToCachedUserWhenRefreshFails() {
-
-        // Arrange: stale user, but GitHub API throws exception (e.g. rate limited)
-        GitHubUser staleUser = GitHubUser.builder()
-                .githubId(583231L)
-                .username("octocat")
-                .name("Old Name")
-                .bio("Old Bio")
-                .avatarUrl("https://avatars.githubusercontent.com/u/583231?v=4")
-                .followers(50)
-                .following(5)
-                .publicRepos(4)
-                .updatedAt(LocalDateTime.now().minusMinutes(30))
-                .build();
-
+    void shouldPropagateRateLimitExceededExceptionWhenRefreshingStaleUser() {
+        GitHubUser staleUser = createStaleUser();
         when(gitHubUserRepository.findByUsernameIgnoreCase("octocat"))
                 .thenReturn(Optional.of(staleUser));
-
         when(gitHubApiClient.getUser("octocat"))
-                .thenThrow(new RuntimeException("GitHub API rate limit exceeded"));
+                .thenThrow(new RateLimitExceededException("GitHub API rate limit exceeded", 60L, 1740000000L));
 
-        // Act: should not throw, gracefully fall back to cached user
+        assertThrows(RateLimitExceededException.class, () -> gitHubUserService.getUser("octocat"));
+        verify(gitHubApiClient).getUser("octocat");
+        verify(gitHubUserRepository, never()).save(any());
+    }
+
+    @Test
+    void shouldPropagateAuthenticationExceptionWhenRefreshingStaleUser() {
+        GitHubUser staleUser = createStaleUser();
+        when(gitHubUserRepository.findByUsernameIgnoreCase("octocat"))
+                .thenReturn(Optional.of(staleUser));
+        when(gitHubApiClient.getUser("octocat"))
+                .thenThrow(new GitHubAuthenticationException("Bad credentials"));
+
+        assertThrows(GitHubAuthenticationException.class, () -> gitHubUserService.getUser("octocat"));
+        verify(gitHubApiClient).getUser("octocat");
+        verify(gitHubUserRepository, never()).save(any());
+    }
+
+    @Test
+    void shouldPropagateForbiddenExceptionWhenRefreshingStaleUser() {
+        GitHubUser staleUser = createStaleUser();
+        when(gitHubUserRepository.findByUsernameIgnoreCase("octocat"))
+                .thenReturn(Optional.of(staleUser));
+        when(gitHubApiClient.getUser("octocat"))
+                .thenThrow(new GitHubForbiddenException("Resource forbidden"));
+
+        assertThrows(GitHubForbiddenException.class, () -> gitHubUserService.getUser("octocat"));
+        verify(gitHubApiClient).getUser("octocat");
+        verify(gitHubUserRepository, never()).save(any());
+    }
+
+    @Test
+    void shouldPropagateResourceNotFoundExceptionWhenRefreshingStaleUser() {
+        GitHubUser staleUser = createStaleUser();
+        when(gitHubUserRepository.findByUsernameIgnoreCase("octocat"))
+                .thenReturn(Optional.of(staleUser));
+        when(gitHubApiClient.getUser("octocat"))
+                .thenThrow(new ResourceNotFoundException("GitHub user octocat not found"));
+
+        assertThrows(ResourceNotFoundException.class, () -> gitHubUserService.getUser("octocat"));
+        verify(gitHubApiClient).getUser("octocat");
+        verify(gitHubUserRepository, never()).save(any());
+    }
+
+    @Test
+    void shouldPropagateValidationExceptionWhenRefreshingStaleUser() {
+        GitHubUser staleUser = createStaleUser();
+        when(gitHubUserRepository.findByUsernameIgnoreCase("octocat"))
+                .thenReturn(Optional.of(staleUser));
+        when(gitHubApiClient.getUser("octocat"))
+                .thenThrow(new GitHubValidationException("Validation failed"));
+
+        assertThrows(GitHubValidationException.class, () -> gitHubUserService.getUser("octocat"));
+        verify(gitHubApiClient).getUser("octocat");
+        verify(gitHubUserRepository, never()).save(any());
+    }
+
+    @Test
+    void shouldFallbackToCachedUserOn503ServiceUnavailableWhenRefreshingStaleUser() {
+        GitHubUser staleUser = createStaleUser();
+        when(gitHubUserRepository.findByUsernameIgnoreCase("octocat"))
+                .thenReturn(Optional.of(staleUser));
+        when(gitHubApiClient.getUser("octocat"))
+                .thenThrow(new GitHubServiceUnavailableException("GitHub service is temporarily unavailable"));
+
         GitHubUserResponse response = gitHubUserService.getUser("octocat");
 
-        // Assert
         assertEquals("octocat", response.username());
         assertEquals("Old Name", response.name());
         assertEquals("Old Bio", response.bio());
+        verify(gitHubApiClient).getUser("octocat");
+    }
 
+    @Test
+    void shouldFallbackToCachedUserOnNetworkFailureWhenRefreshingStaleUser() {
+        GitHubUser staleUser = createStaleUser();
+        when(gitHubUserRepository.findByUsernameIgnoreCase("octocat"))
+                .thenReturn(Optional.of(staleUser));
+        when(gitHubApiClient.getUser("octocat"))
+                .thenThrow(new ResourceAccessException("Connection timed out to api.github.com"));
+
+        GitHubUserResponse response = gitHubUserService.getUser("octocat");
+
+        assertEquals("octocat", response.username());
+        assertEquals("Old Name", response.name());
+        assertEquals("Old Bio", response.bio());
         verify(gitHubApiClient).getUser("octocat");
     }
 }

@@ -5,6 +5,11 @@ import com.gitracker.dto.GitHubUserDto;
 import com.gitracker.dto.GitHubUserResponse;
 import com.gitracker.entity.GitHubUser;
 import com.gitracker.repository.GitHubUserRepository;
+import com.gitracker.exception.GitHubAuthenticationException;
+import com.gitracker.exception.GitHubForbiddenException;
+import com.gitracker.exception.GitHubValidationException;
+import com.gitracker.exception.RateLimitExceededException;
+import com.gitracker.exception.ResourceNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -88,8 +93,12 @@ public class GitHubUserService {
                         freshUser.avatarUrl(),
                         freshUser.createdAt()
                 );
+            } catch (RateLimitExceededException | GitHubAuthenticationException | GitHubForbiddenException |
+                     ResourceNotFoundException | GitHubValidationException clientException) {
+                log.warn("GitHub client error refreshing user {}: {}", username, clientException.getMessage());
+                throw clientException;
             } catch (Exception e) {
-                log.warn("Failed to refresh user {} from GitHub API, falling back to cached stale data: {}", username, e.getMessage());
+                log.warn("Temporary GitHub outage or network failure ({}), falling back to cached user data for {}", e.getMessage(), username);
                 return new GitHubUserResponse(
                         user.getUsername(),
                         user.getName(),

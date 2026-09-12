@@ -141,12 +141,12 @@ public class GitHubApiClient {
                     .uri("/repos/{username}/{repoName}/readme", username, repoName)
                     .retrieve()
                     .body(GitHubReadmeDto.class);
-        } catch (HttpClientErrorException.NotFound exception) {
+        } catch (HttpClientErrorException.NotFound | HttpClientErrorException.Conflict exception) {
             return null;
         } catch (HttpClientErrorException exception) {
             throw handleHttpClientError(exception, "README for repository '" + repoName + "'");
         } catch (Exception exception) {
-            return null;
+            throw handleGeneralException(exception, "README for repository '" + repoName + "'");
         }
     }
 
@@ -292,8 +292,12 @@ public class GitHubApiClient {
                     .retrieve()
                     .body(Map[].class);
             return commits != null ? List.of(commits) : List.of();
-        } catch (Exception e) {
+        } catch (HttpClientErrorException.Conflict exception) {
             return List.of();
+        } catch (HttpClientErrorException exception) {
+            throw handleHttpClientError(exception, "commits for repository '" + repo + "'");
+        } catch (Exception exception) {
+            throw handleGeneralException(exception, "commits for repository '" + repo + "'");
         }
     }
 
@@ -306,8 +310,12 @@ public class GitHubApiClient {
                     .retrieve()
                     .body(Map[].class);
             return prs != null ? List.of(prs) : List.of();
-        } catch (Exception e) {
+        } catch (HttpClientErrorException.Conflict exception) {
             return List.of();
+        } catch (HttpClientErrorException exception) {
+            throw handleHttpClientError(exception, "pull requests for repository '" + repo + "'");
+        } catch (Exception exception) {
+            throw handleGeneralException(exception, "pull requests for repository '" + repo + "'");
         }
     }
 
@@ -320,8 +328,12 @@ public class GitHubApiClient {
                     .retrieve()
                     .body(Map[].class);
             return issues != null ? List.of(issues) : List.of();
-        } catch (Exception e) {
+        } catch (HttpClientErrorException.Conflict exception) {
             return List.of();
+        } catch (HttpClientErrorException exception) {
+            throw handleHttpClientError(exception, "issues for repository '" + repo + "'");
+        } catch (Exception exception) {
+            throw handleGeneralException(exception, "issues for repository '" + repo + "'");
         }
     }
 
@@ -333,8 +345,12 @@ public class GitHubApiClient {
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
                     .retrieve()
                     .body(Map.class);
-        } catch (Exception e) {
+        } catch (HttpClientErrorException.Conflict exception) {
             return Map.of();
+        } catch (HttpClientErrorException exception) {
+            throw handleHttpClientError(exception, "languages for repository '" + repo + "'");
+        } catch (Exception exception) {
+            throw handleGeneralException(exception, "languages for repository '" + repo + "'");
         }
     }
 
@@ -362,7 +378,7 @@ public class GitHubApiClient {
         } catch (ResourceNotFoundException | RateLimitExceededException | com.gitracker.exception.GitHubForbiddenException | com.gitracker.exception.GitHubAuthenticationException | com.gitracker.exception.GitHubValidationException | com.gitracker.exception.GitHubServiceUnavailableException exception) {
             throw exception;
         } catch (Exception exception) {
-            return new GitHubContributorDto[0];
+            throw handleGeneralException(exception, "contributors for repository '" + repo + "' for owner '" + owner + "'");
         }
     }
 
@@ -390,7 +406,7 @@ public class GitHubApiClient {
         } catch (ResourceNotFoundException | RateLimitExceededException | com.gitracker.exception.GitHubForbiddenException | com.gitracker.exception.GitHubAuthenticationException | com.gitracker.exception.GitHubValidationException | com.gitracker.exception.GitHubServiceUnavailableException exception) {
             throw exception;
         } catch (Exception exception) {
-            return null;
+            throw handleGeneralException(exception, "commit activity for repository '" + repo + "' for owner '" + owner + "'");
         }
     }
 
@@ -418,7 +434,7 @@ public class GitHubApiClient {
         } catch (ResourceNotFoundException | RateLimitExceededException | com.gitracker.exception.GitHubForbiddenException | com.gitracker.exception.GitHubAuthenticationException | com.gitracker.exception.GitHubValidationException | com.gitracker.exception.GitHubServiceUnavailableException exception) {
             throw exception;
         } catch (Exception exception) {
-            return null;
+            throw handleGeneralException(exception, "code frequency for repository '" + repo + "' for owner '" + owner + "'");
         }
     }
 
@@ -446,7 +462,7 @@ public class GitHubApiClient {
         } catch (ResourceNotFoundException | RateLimitExceededException | com.gitracker.exception.GitHubForbiddenException | com.gitracker.exception.GitHubAuthenticationException | com.gitracker.exception.GitHubValidationException | com.gitracker.exception.GitHubServiceUnavailableException exception) {
             throw exception;
         } catch (Exception exception) {
-            return null;
+            throw handleGeneralException(exception, "participation for repository '" + repo + "' for owner '" + owner + "'");
         }
     }
 
@@ -537,7 +553,7 @@ public class GitHubApiClient {
             if ("0".equals(remaining)) {
                 return true;
             }
-            if (headers.getFirst("Retry-After") != null || headers.getFirst("X-RateLimit-Reset") != null) {
+            if (headers.getFirst("Retry-After") != null) {
                 return true;
             }
         }

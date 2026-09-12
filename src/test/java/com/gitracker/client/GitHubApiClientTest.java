@@ -491,4 +491,69 @@ class GitHubApiClientTest {
         assertThrows(com.gitracker.exception.GitHubServiceUnavailableException.class, () -> gitHubApiClient.getUser("octocat"));
         server.verify();
     }
+
+    @Test
+    void shouldPropagateErrorInGetRepoCommitsOn500() {
+        server.expect(requestTo("https://api.github.com/repos/octocat/Hello-World/commits?per_page=30"))
+                .andRespond(withStatus(HttpStatus.INTERNAL_SERVER_ERROR));
+
+        assertThrows(com.gitracker.exception.GitHubServiceUnavailableException.class, () ->
+                gitHubApiClient.getRepoCommits("octocat", "Hello-World", "token"));
+        server.verify();
+    }
+
+    @Test
+    void shouldReturnEmptyListInGetRepoCommitsOn409Conflict() {
+        server.expect(requestTo("https://api.github.com/repos/octocat/Hello-World/commits?per_page=30"))
+                .andRespond(withStatus(HttpStatus.CONFLICT));
+
+        var commits = gitHubApiClient.getRepoCommits("octocat", "Hello-World", "token");
+        assertNotNull(commits);
+        assertTrue(commits.isEmpty());
+        server.verify();
+    }
+
+    @Test
+    void shouldPropagateErrorInGetRepoPullRequestsOn401() {
+        server.expect(requestTo("https://api.github.com/repos/octocat/Hello-World/pulls?state=all&per_page=30"))
+                .andRespond(withStatus(HttpStatus.UNAUTHORIZED));
+
+        assertThrows(com.gitracker.exception.GitHubAuthenticationException.class, () ->
+                gitHubApiClient.getRepoPullRequests("octocat", "Hello-World", "bad-token"));
+        server.verify();
+    }
+
+    @Test
+    void shouldPropagateErrorInGetRepoLanguagesOn429() {
+        org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+        headers.add("Retry-After", "120");
+
+        server.expect(requestTo("https://api.github.com/repos/octocat/Hello-World/languages"))
+                .andRespond(withStatus(HttpStatus.TOO_MANY_REQUESTS).headers(headers));
+
+        RateLimitExceededException ex = assertThrows(RateLimitExceededException.class, () ->
+                gitHubApiClient.getRepoLanguages("octocat", "Hello-World", "token"));
+        assertEquals(120L, ex.getRetryAfterSeconds());
+        server.verify();
+    }
+
+    @Test
+    void shouldPropagateErrorInGetContributorsOn500() {
+        server.expect(requestTo("https://api.github.com/repos/octocat/Hello-World/contributors?per_page=100"))
+                .andRespond(withStatus(HttpStatus.INTERNAL_SERVER_ERROR));
+
+        assertThrows(com.gitracker.exception.GitHubServiceUnavailableException.class, () ->
+                gitHubApiClient.getContributors("octocat", "Hello-World"));
+        server.verify();
+    }
+
+    @Test
+    void shouldPropagateErrorInGetReadmeOn503() {
+        server.expect(requestTo("https://api.github.com/repos/octocat/Hello-World/readme"))
+                .andRespond(withStatus(HttpStatus.SERVICE_UNAVAILABLE));
+
+        assertThrows(com.gitracker.exception.GitHubServiceUnavailableException.class, () ->
+                gitHubApiClient.getReadme("octocat", "Hello-World"));
+        server.verify();
+    }
 }

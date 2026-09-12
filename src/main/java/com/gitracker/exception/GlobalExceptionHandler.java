@@ -22,9 +22,15 @@ public class GlobalExceptionHandler {
         ErrorResponse errorResponse = new ErrorResponse(
                 exception.getMessage(),
                 HttpStatus.TOO_MANY_REQUESTS.value(),
-                LocalDateTime.now()
+                LocalDateTime.now(),
+                exception.getRetryAfterSeconds(),
+                exception.getResetTimeSeconds()
         );
-        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(errorResponse);
+        ResponseEntity.BodyBuilder builder = ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS);
+        if (exception.getRetryAfterSeconds() != null && exception.getRetryAfterSeconds() > 0) {
+            builder.header("Retry-After", String.valueOf(exception.getRetryAfterSeconds()));
+        }
+        return builder.body(errorResponse);
     }
 
     @ExceptionHandler(ResourceNotFoundException.class)

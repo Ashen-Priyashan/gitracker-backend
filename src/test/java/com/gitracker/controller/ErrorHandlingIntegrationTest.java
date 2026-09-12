@@ -66,6 +66,22 @@ class ErrorHandlingIntegrationTest {
     }
 
     @Test
+    void shouldReturn429WithRetryMetadataWhenRateLimitExceededWithRetryAfter() throws Exception {
+        when(gitHubUserService.getUser("rate-limited-user"))
+                .thenThrow(new RateLimitExceededException("GitHub API rate limit exceeded. Please try again later.", 60L, 1700000000L));
+
+        mockMvc.perform(get("/api/users/rate-limited-user")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("Retry-After", "60"))
+                .andExpect(jsonPath("$.message").value("GitHub API rate limit exceeded. Please try again later."))
+                .andExpect(jsonPath("$.status").value(429))
+                .andExpect(jsonPath("$.retryAfterSeconds").value(60))
+                .andExpect(jsonPath("$.resetTimeSeconds").value(1700000000L))
+                .andExpect(jsonPath("$.timestamp").exists());
+    }
+
+    @Test
     void shouldReturn400WhenIllegalArgumentThrown() throws Exception {
 
         when(gitHubUserService.getUser("invalid-user"))

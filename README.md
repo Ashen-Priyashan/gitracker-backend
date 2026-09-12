@@ -43,7 +43,7 @@ Maven does not need to be installed separately; the Maven Wrapper is included.
 
    | Service | Host port | Container port |
    | --- | --- | --- |
-   | PostgreSQL | `5433` | `5432` |
+   | PostgreSQL | `5435` | `5432` |
    | Redis | `6379` | `6379` |
 
 2. Configure environment variables. The defaults match the Docker Compose configuration, but a GitHub token is recommended to avoid low unauthenticated GitHub API limits.
@@ -51,7 +51,7 @@ Maven does not need to be installed separately; the Maven Wrapper is included.
    PowerShell example:
 
    ```powershell
-   $env:DB_URL = "jdbc:postgresql://localhost:5433/gitracker"
+   $env:DB_URL = "jdbc:postgresql://localhost:5435/gitracker"
    $env:DB_USERNAME = "postgres"
    $env:DB_PASSWORD = "postgres"
    $env:REDIS_HOST = "localhost"
@@ -160,6 +160,9 @@ ENCRYPTION_SECRET_KEY=your_secure_32_character_encryption_key_here!
 
 Database schema migrations are managed automatically by Flyway in `src/main/resources/db/migration/`.
 - `V1__initial_schema.sql`: Establishes initial PostgreSQL tables (users, github_users, repositories, user_analytics, repository_analytics, language_analytics) and indexes.
+- `V2__developer_intelligence_schema.sql`: Adds developer score tracking, commits, issues, and pull request intelligence tables.
+- `V3__deduplicate_github_users_and_case_insensitive_index.sql`: Deduplicates GitHub users, reconciles repository relationships, preserves topics, and creates case-insensitive username indexes.
+- `V4__commit_repository_scoped_identity_and_github_created_at.sql`: Scopes commit identity to (repository_id, sha) and adds github_created_at.
 - In production (`prod` profile), Hibernate DDL is set to `validate`, ensuring no unverified schema modifications occur.
 
 ## Configuration
@@ -167,7 +170,7 @@ Database schema migrations are managed automatically by Flyway in `src/main/reso
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `SPRING_PROFILES_ACTIVE` | `dev` | Active Spring profile (`dev` or `prod`). |
-| `DB_URL` | `jdbc:postgresql://localhost:5433/gitracker` | PostgreSQL JDBC connection URL. |
+| `DB_URL` | `jdbc:postgresql://localhost:5435/gitracker` | PostgreSQL JDBC connection URL. |
 | `DB_USERNAME` | `postgres` | PostgreSQL username. |
 | `DB_PASSWORD` | `postgres` | PostgreSQL password. |
 | `CACHE_TYPE` | `none` | Cache backend provider (`none` or `redis`). |
@@ -218,7 +221,7 @@ docker compose up --build -d
 
 | Service | Host Port | Internal Port | Healthcheck |
 | --- | --- | --- | --- |
-| `postgres` | `5433` | `5432` | `pg_isready` |
+| `postgres` | `5435` | `5432` | `pg_isready` |
 | `redis` | `6379` | `6379` | `redis-cli ping` |
 | `backend` | `8080` | `8080` | `/actuator/health` |
 | `frontend` | `5173` | `80` | Nginx SPA |

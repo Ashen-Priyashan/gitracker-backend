@@ -204,9 +204,14 @@ public class LoginRateLimiter {
             return 0L;
         }
         try {
-            return Long.parseLong(val);
-        } catch (NumberFormatException e) {
-            return 0L;
+            long count = Long.parseLong(val.trim());
+            if (count < 0) {
+                throw new NumberFormatException("Negative counter value");
+            }
+            return count;
+        } catch (Exception e) {
+            log.warn("Malformed login rate-limit counter encountered in Redis");
+            throw new IllegalStateException("Malformed login rate-limit counter in Redis", e);
         }
     }
 

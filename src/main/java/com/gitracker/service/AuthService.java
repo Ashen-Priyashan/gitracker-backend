@@ -20,10 +20,17 @@ public class AuthService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final LoginRateLimiter loginRateLimiter;
 
-    public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+    @org.springframework.beans.factory.annotation.Autowired
+    public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder, @org.springframework.beans.factory.annotation.Autowired(required = false) LoginRateLimiter loginRateLimiter) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.loginRateLimiter = loginRateLimiter;
+    }
+
+    public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+        this(userRepository, passwordEncoder, null);
     }
 
     @Transactional
@@ -68,13 +75,27 @@ public class AuthService {
         }
 
         String normalizedEmail = request.email().trim().toLowerCase();
+        String clientIp = loginRateLimiter != null ? loginRateLimiter.resolveClientIp(httpRequest) : "127.0.0.1";
+
+        // Pre-check abuse limits (IP first, then Account)
+        if (loginRateLimiter != null) {
+            loginRateLimiter.checkRateLimit(normalizedEmail, clientIp);
+        }
+
         Optional<UserEntity> userOpt = userRepository.findByEmail(normalizedEmail);
 
         if (userOpt.isEmpty() || !passwordEncoder.matches(request.password(), userOpt.get().getPassword())) {
+            if (loginRateLimiter != null) {
+                loginRateLimiter.recordFailedAttempt(normalizedEmail, clientIp);
+            }
             throw new IllegalArgumentException("Invalid email or password");
         }
 
         UserEntity user = userOpt.get();
+
+        if (loginRateLimiter != null) {
+            loginRateLimiter.recordSuccessfulLogin(normalizedEmail);
+        }
 
         establishAuthenticatedSession(httpRequest, user.getId());
 

@@ -705,4 +705,113 @@ class LoginRateLimitIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(validUser.getId()));
     }
+
+    // =========================================================================
+    // 20. Malformed Account Counter Triggers FAIL_CLOSED (HTTP 429)
+    // =========================================================================
+
+    @Test
+    void shouldFailClosedWhenRedisCounterIsMalformed() throws Exception {
+        String email = "ratelimit.user@example.com";
+        String accountKey = loginRateLimiter.buildAccountKey(email);
+
+        // Corrupt the account counter in Redis with invalid string
+        redisTemplate.opsForValue().set(accountKey, "not-a-number", 300, TimeUnit.SECONDS);
+
+        LoginRequest request = new LoginRequest(email, "ValidPassword123!");
+        MvcResult result = mockMvc.perform(post("/api/auth/login")
+                        .with(req -> { req.setRemoteAddr("10.0.0.18"); return req; })
+                        .cookie(new Cookie(CSRF_COOKIE_NAME, csrfToken))
+                        .header(CSRF_HEADER_NAME, csrfToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(header().string("Retry-After", "60"))
+                .andExpect(jsonPath("$.status").value(429))
+                .andExpect(jsonPath("$.retryAfterSeconds").value(60))
+                .andReturn();
+
+        // Verify NumberFormatException and stack trace details are NOT leaked to the client
+        String responseBody = result.getResponse().getContentAsString();
+        assertFalse(responseBody.contains("NumberFormatException"));
+        assertFalse(responseBody.contains("not-a-number"));
+        assertFalse(responseBody.contains("Exception"));
+    }
+
+    // =========================================================================
+    // 21. Malformed IP Counter Triggers FAIL_CLOSED and Skips DB/Auth Lookup
+    // =========================================================================
+
+    @Test
+    void shouldFailClosedWhenIpCounterIsMalformed() throws Exception {
+        String clientIp = "10.0.0.19";
+        String ipKey = loginRateLimiter.buildIpKey(clientIp);
+
+        // Corrupt the IP counter in Redis
+        redisTemplate.opsForValue().set(ipKey, "invalid-ip-counter", 300, TimeUnit.SECONDS);
+
+        clearInvocations(userRepository);
+        clearInvocations(passwordEncoder);
+
+        LoginRequest request = new LoginRequest("ratelimit.user@example.com", "ValidPassword123!");
+        mockMvc.perform(post("/api/auth/login")
+                        .with(req -> { req.setRemoteAddr(clientIp); return req; })
+                        .cookie(new Cookie(CSRF_COOKIE_NAME, csrfToken))
+                        .header(CSRF_HEADER_NAME, csrfToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(header().string("Retry-After", "60"))
+                .andExpect(jsonPath("$.status").value(429));
+
+        // Verify DB lookup and password matching are completely bypassed
+        verify(userRepository, never()).findByEmail(anyString());
+        verify(passwordEncoder, never()).matches(any(), any());
+    }
+
+    // =========================================================================
+    // 22. Negative Counter Values Treated as Malformed State (HTTP 429)
+    // =========================================================================
+
+    @Test
+    void shouldFailClosedWhenCounterIsNegative() throws Exception {
+        String email = "ratelimit.user@example.com";
+        String accountKey = loginRateLimiter.buildAccountKey(email);
+
+        // Set invalid negative counter in Redis
+        redisTemplate.opsForValue().set(accountKey, "-1", 300, TimeUnit.SECONDS);
+
+        LoginRequest request = new LoginRequest(email, "ValidPassword123!");
+        mockMvc.perform(post("/api/auth/login")
+                        .with(req -> { req.setRemoteAddr("10.0.0.20"); return req; })
+                        .cookie(new Cookie(CSRF_COOKIE_NAME, csrfToken))
+                        .header(CSRF_HEADER_NAME, csrfToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(header().string("Retry-After", "60"))
+                .andExpect(jsonPath("$.status").value(429));
+    }
+
+    // =========================================================================
+    // 23. FAIL_OPEN Behavior on Malformed Counter State
+    // =========================================================================
+
+    @Test
+    void shouldAllowLoginWhenFailOpenIsConfiguredAndCounterIsMalformed() {
+        StringRedisTemplate mockRedis = mock(StringRedisTemplate.class);
+        ValueOperations<String, String> ops = mock(ValueOperations.class);
+        when(mockRedis.opsForValue()).thenReturn(ops);
+        when(ops.get(anyString())).thenReturn("malformed-data");
+
+        LoginRateLimiter failOpenLimiter = new LoginRateLimiter(
+                mockRedis, true, 5, 300, 20, 300, "FAIL_OPEN"
+        );
+
+        // FAIL_OPEN allows checkRateLimit and recordFailedAttempt to proceed without throwing
+        assertDoesNotThrow(() ->
+                failOpenLimiter.checkRateLimit("user@example.com", "10.0.0.21"));
+        assertDoesNotThrow(() ->
+                failOpenLimiter.recordFailedAttempt("user@example.com", "10.0.0.21"));
+    }
 }

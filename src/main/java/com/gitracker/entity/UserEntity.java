@@ -30,7 +30,7 @@ public class UserEntity {
     private String githubUsername;
 
     @OneToOne(cascade = CascadeType.ALL, orphanRemoval = true)
-    @JoinColumn(name = "github_connection_id", referencedColumnName = "id")
+    @JoinColumn(name = "github_connection_id", referencedColumnName = "id", unique = true)
     private GitHubAppConnection githubConnection;
 
     private LocalDateTime createdAt;

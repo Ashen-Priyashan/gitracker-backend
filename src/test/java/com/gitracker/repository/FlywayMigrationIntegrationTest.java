@@ -52,10 +52,10 @@ class FlywayMigrationIntegrationTest {
         // 2. Execute migration using Flyway API
         MigrateResult initialResult = flyway.migrate();
 
-        // 3. Verify all 5 migrations were executed and marked successful by Flyway engine
+        // 3. Verify all 6 migrations were executed and marked successful by Flyway engine
         assertTrue(initialResult.success, "Flyway migration execution must succeed");
-        assertEquals(5, initialResult.migrationsExecuted, "Exactly 5 migrations (V1-V5) should be executed initially");
-        assertEquals("5", initialResult.targetSchemaVersion, "Target schema version should be 5");
+        assertEquals(6, initialResult.migrationsExecuted, "Exactly 6 migrations (V1-V6) should be executed initially");
+        assertEquals("6", initialResult.targetSchemaVersion, "Target schema version should be 6");
 
         // 4. Verify flyway_schema_history table was created by Flyway
         Integer historyTableExists = jdbcTemplate.queryForObject(
@@ -68,9 +68,9 @@ class FlywayMigrationIntegrationTest {
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(
                 "SELECT installed_rank, version, description, type, script, checksum, success FROM flyway_schema_history ORDER BY installed_rank"
         );
-        assertEquals(5, rows.size(), "flyway_schema_history should contain 5 records");
+        assertEquals(6, rows.size(), "flyway_schema_history should contain 6 records");
 
-        for (int i = 0; i < 5; i++) {
+        for (int i = 0; i < 6; i++) {
             Map<String, Object> row = rows.get(i);
             int installedRank = (int) row.get("installed_rank");
             String version = (String) row.get("version");
@@ -78,15 +78,15 @@ class FlywayMigrationIntegrationTest {
             Object checksum = row.get("checksum");
 
             assertEquals(i + 1, installedRank, "Migrations must execute in sequential order");
-            assertEquals(String.valueOf(i + 1), version, "Migration versions must match sequential numbering (1..5)");
+            assertEquals(String.valueOf(i + 1), version, "Migration versions must match sequential numbering (1..6)");
             assertTrue(success, "Every migration must be marked as successful in history table");
             assertNotNull(checksum, "Every migration must have an associated checksum calculated by Flyway");
         }
 
         // 6. Verify Flyway info API
         MigrationInfo[] appliedMigrations = flyway.info().applied();
-        assertEquals(5, appliedMigrations.length);
-        assertEquals("5", flyway.info().current().getVersion().getVersion());
+        assertEquals(6, appliedMigrations.length);
+        assertEquals("6", flyway.info().current().getVersion().getVersion());
 
         // 7. Test Idempotence: Rerunning Flyway should execute 0 new migrations
         MigrateResult rerunResult = flyway.migrate();
@@ -96,6 +96,6 @@ class FlywayMigrationIntegrationTest {
         // 8. Verify history table record count is unchanged after rerun
         Integer historyCountAfterRerun = jdbcTemplate.queryForObject(
                 "SELECT count(*) FROM flyway_schema_history", Integer.class);
-        assertEquals(5, historyCountAfterRerun, "History table count should remain unchanged after idempotent rerun");
+        assertEquals(6, historyCountAfterRerun, "History table count should remain unchanged after idempotent rerun");
     }
 }

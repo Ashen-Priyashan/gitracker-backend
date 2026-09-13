@@ -41,12 +41,9 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf
                         .csrfTokenRepository(csrfTokenRepository)
                         .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler())
-                        .ignoringRequestMatchers(
-                                "/api/auth/login",
-                                "/api/auth/signup",
-                                "/api/auth/link-github",
-                                "/api/github/callback"
-                        )
+                        // All state-changing methods (POST, PUT, PATCH, DELETE) require CSRF tokens.
+                        // GET /api/github/callback is a safe method from Spring CSRF perspective
+                        // and is secured against CSRF via OAuth 2.0 RFC 6749 state parameter validation.
                 )
                 .cors(Customizer.withDefaults())
                 .securityContext(context -> context
@@ -68,6 +65,7 @@ public class SecurityConfig {
                                 "/api/auth/login",
                                 "/api/auth/signup",
                                 "/api/auth/me",
+                                "/api/auth/csrf",
                                 "/api/health",
                                 "/actuator/health/**",
                                 "/actuator/info",

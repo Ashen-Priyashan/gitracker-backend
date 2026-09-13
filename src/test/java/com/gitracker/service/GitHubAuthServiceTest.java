@@ -165,4 +165,42 @@ class GitHubAuthServiceTest {
         verify(connectionRepository).delete(connection);
         assertNull(session.getAttribute("CONNECTED_GITHUB_USERNAME"));
     }
+
+    @Test
+    void shouldRejectCallbackWhenOAuthStateIsMissing() {
+        MockHttpSession session = new MockHttpSession();
+        session.setAttribute("GITHUB_OAUTH_STATE", "valid-state-123");
+
+        String redirect = gitHubAuthService.handleCallback("code-123", null, session);
+
+        assertEquals("http://localhost:5173/settings?error=invalid_state", redirect);
+        assertEquals("valid-state-123", session.getAttribute("GITHUB_OAUTH_STATE"), "State must remain if mismatched");
+        verifyNoInteractions(gitHubApiClient);
+    }
+
+    @Test
+    void shouldRejectCallbackWhenOAuthStateIsMismatched() {
+        MockHttpSession session = new MockHttpSession();
+        session.setAttribute("GITHUB_OAUTH_STATE", "valid-state-123");
+
+        String redirect = gitHubAuthService.handleCallback("code-123", "attacker-state", session);
+
+        assertEquals("http://localhost:5173/settings?error=invalid_state", redirect);
+        verifyNoInteractions(gitHubApiClient);
+    }
+
+    @Test
+    void shouldRemoveStateAndPreventReplayAttacks() {
+        MockHttpSession session = new MockHttpSession();
+        session.setAttribute("GITHUB_OAUTH_STATE", "single-use-state");
+
+        // First callback with blank code validates and removes state from session
+        String firstRedirect = gitHubAuthService.handleCallback("", "single-use-state", session);
+        assertEquals("http://localhost:5173/settings?error=missing_code", firstRedirect);
+        assertNull(session.getAttribute("GITHUB_OAUTH_STATE"), "State must be removed after validation");
+
+        // Replay attempt with same state must fail because state is now absent
+        String replayRedirect = gitHubAuthService.handleCallback("new-code", "single-use-state", session);
+        assertEquals("http://localhost:5173/settings?error=invalid_state", replayRedirect);
+    }
 }

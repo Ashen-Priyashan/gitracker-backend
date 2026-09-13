@@ -8,9 +8,11 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
@@ -88,6 +90,26 @@ public class AuthController {
         return ResponseEntity.ok(Map.of(
                 "authenticated", true,
                 "user", user
+        ));
+    }
+
+    @Operation(
+            summary = "Get CSRF token",
+            description = "Resolves the active CSRF token and sets the XSRF-TOKEN cookie for the SPA client."
+    )
+    @GetMapping("/csrf")
+    public ResponseEntity<Map<String, String>> getCsrfToken(HttpServletRequest request) {
+        CsrfToken csrfToken = (CsrfToken) request.getAttribute(CsrfToken.class.getName());
+        if (csrfToken == null) {
+            csrfToken = (CsrfToken) request.getAttribute("_csrf");
+        }
+        String token = csrfToken != null ? csrfToken.getToken() : "";
+        String headerName = csrfToken != null ? csrfToken.getHeaderName() : "X-XSRF-TOKEN";
+        String parameterName = csrfToken != null ? csrfToken.getParameterName() : "_csrf";
+        return ResponseEntity.ok(Map.of(
+                "token", token,
+                "headerName", headerName,
+                "parameterName", parameterName
         ));
     }
 

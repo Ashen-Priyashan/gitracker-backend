@@ -5,6 +5,7 @@ import com.gitracker.dto.SignUpRequest;
 import com.gitracker.dto.UserAuthResponse;
 import com.gitracker.entity.UserEntity;
 import com.gitracker.repository.UserRepository;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -26,7 +27,7 @@ public class AuthService {
     }
 
     @Transactional
-    public UserAuthResponse signUp(SignUpRequest request, HttpSession session) {
+    public UserAuthResponse signUp(SignUpRequest request, HttpServletRequest httpRequest) {
         if (request.name() == null || request.name().isBlank()) {
             throw new IllegalArgumentException("Name is required");
         }
@@ -52,12 +53,13 @@ public class AuthService {
                 .build();
 
         UserEntity savedUser = userRepository.save(user);
-        session.setAttribute(SESSION_USER_ID_KEY, savedUser.getId());
+
+        establishAuthenticatedSession(httpRequest, savedUser.getId());
 
         return mapToUserAuthResponse(savedUser);
     }
 
-    public UserAuthResponse login(LoginRequest request, HttpSession session) {
+    public UserAuthResponse login(LoginRequest request, HttpServletRequest httpRequest) {
         if (request.email() == null || request.email().isBlank()) {
             throw new IllegalArgumentException("Email is required");
         }
@@ -73,9 +75,23 @@ public class AuthService {
         }
 
         UserEntity user = userOpt.get();
-        session.setAttribute(SESSION_USER_ID_KEY, user.getId());
+
+        establishAuthenticatedSession(httpRequest, user.getId());
 
         return mapToUserAuthResponse(user);
+    }
+
+    private void establishAuthenticatedSession(HttpServletRequest httpRequest, Long userId) {
+        if (httpRequest == null) {
+            return;
+        }
+        HttpSession session = httpRequest.getSession(false);
+        if (session != null) {
+            httpRequest.changeSessionId();
+        } else {
+            session = httpRequest.getSession(true);
+        }
+        session.setAttribute(SESSION_USER_ID_KEY, userId);
     }
 
     public void logout(HttpSession session) {

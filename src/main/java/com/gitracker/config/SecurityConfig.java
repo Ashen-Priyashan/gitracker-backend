@@ -52,6 +52,7 @@ public class SecurityConfig {
                 )
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
+                        .sessionFixation(fixation -> fixation.changeSessionId())
                 )
                 .exceptionHandling(handling -> handling
                         .authenticationEntryPoint((request, response, authException) ->

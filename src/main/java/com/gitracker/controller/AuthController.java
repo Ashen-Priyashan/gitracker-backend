@@ -40,9 +40,9 @@ public class AuthController {
             @ApiResponse(responseCode = "400", description = "Invalid request or duplicate email")
     })
     @PostMapping("/signup")
-    public ResponseEntity<?> signUp(@RequestBody SignUpRequest request, HttpSession session) {
+    public ResponseEntity<?> signUp(@RequestBody SignUpRequest request, HttpServletRequest httpRequest) {
         try {
-            UserAuthResponse response = authService.signUp(request, session);
+            UserAuthResponse response = authService.signUp(request, httpRequest);
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
@@ -58,9 +58,9 @@ public class AuthController {
             @ApiResponse(responseCode = "400", description = "Invalid credentials")
     })
     @PostMapping("/login")
-    public ResponseEntity<?> login(@RequestBody LoginRequest request, HttpSession session) {
+    public ResponseEntity<?> login(@RequestBody LoginRequest request, HttpServletRequest httpRequest) {
         try {
-            UserAuthResponse response = authService.login(request, session);
+            UserAuthResponse response = authService.login(request, httpRequest);
             return ResponseEntity.ok(response);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));

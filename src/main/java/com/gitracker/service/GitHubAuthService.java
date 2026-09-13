@@ -8,11 +8,15 @@ import com.gitracker.dto.RepositoryResponse;
 import com.gitracker.entity.GitHubAppConnection;
 import com.gitracker.entity.UserEntity;
 import com.gitracker.repository.GitHubAppConnectionRepository;
+import com.gitracker.repository.UserRepository;
 import jakarta.servlet.http.HttpSession;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
@@ -34,11 +38,12 @@ public class GitHubAuthService {
     private final String clientSecret;
     private final String redirectUri;
     private final String frontendUrl;
+    private final RestClient oauthRestClient;
     private final GitHubApiClient gitHubApiClient;
     private final GitHubAppConnectionRepository connectionRepository;
-    private final com.gitracker.repository.UserRepository userRepository;
-    private final RestClient oauthRestClient;
+    private final UserRepository userRepository;
 
+    @Autowired
     public GitHubAuthService(
             @Value("${github.app.client-id:}") String clientId,
             @Value("${github.app.client-secret:}") String clientSecret,
@@ -46,7 +51,20 @@ public class GitHubAuthService {
             @Value("${app.frontend-url:http://localhost:5173}") String frontendUrl,
             GitHubApiClient gitHubApiClient,
             GitHubAppConnectionRepository connectionRepository,
-            com.gitracker.repository.UserRepository userRepository
+            UserRepository userRepository
+    ) {
+        this(clientId, clientSecret, redirectUri, frontendUrl, gitHubApiClient, connectionRepository, userRepository, null);
+    }
+
+    public GitHubAuthService(
+            String clientId,
+            String clientSecret,
+            String redirectUri,
+            String frontendUrl,
+            GitHubApiClient gitHubApiClient,
+            GitHubAppConnectionRepository connectionRepository,
+            UserRepository userRepository,
+            RestClient oauthRestClient
     ) {
         this.clientId = clientId;
         this.clientSecret = clientSecret;
@@ -55,7 +73,7 @@ public class GitHubAuthService {
         this.gitHubApiClient = gitHubApiClient;
         this.connectionRepository = connectionRepository;
         this.userRepository = userRepository;
-        this.oauthRestClient = RestClient.builder()
+        this.oauthRestClient = oauthRestClient != null ? oauthRestClient : RestClient.builder()
                 .baseUrl("https://github.com")
                 .build();
     }
@@ -72,11 +90,13 @@ public class GitHubAuthService {
                 .fromUriString("https://github.com/login/oauth/authorize")
                 .queryParam("client_id", clientId)
                 .queryParam("redirect_uri", redirectUri)
+                .queryParam("scope", "read:user,repo")
                 .queryParam("state", state)
                 .encode()
                 .toUriString();
     }
 
+    @Transactional
     @SuppressWarnings("unchecked")
     public String handleCallback(String code, String state, HttpSession session) {
         String sessionState = (String) session.getAttribute(STATE_SESSION_KEY);
@@ -114,10 +134,22 @@ public class GitHubAuthService {
             String scope = (String) response.get("scope");
 
             GitHubUserDto gitHubUser = gitHubApiClient.getAuthenticatedUser(accessToken);
+            Long githubId = gitHubUser.id();
+            Long gitrackerUserId = (Long) session.getAttribute(AuthService.SESSION_USER_ID_KEY);
 
-            Optional<GitHubAppConnection> existingOpt = connectionRepository.findByGithubId(gitHubUser.id());
+            // Ownership boundary check: verify if this GitHub account is already owned by any GitTracker user
+            Optional<UserEntity> existingOwnerOpt = userRepository.findByGithubConnection_GithubId(githubId);
+            if (existingOwnerOpt.isPresent()) {
+                UserEntity existingOwner = existingOwnerOpt.get();
+                if (gitrackerUserId == null || !existingOwner.getId().equals(gitrackerUserId)) {
+                    // Cross-user connection takeover or unauthenticated reassignment attempt: REJECT
+                    return frontendUrl + "/settings?error=account_already_linked";
+                }
+            }
+
+            Optional<GitHubAppConnection> existingOpt = connectionRepository.findByGithubId(githubId);
             GitHubAppConnection connection = existingOpt.orElseGet(() -> GitHubAppConnection.builder()
-                    .githubId(gitHubUser.id())
+                    .githubId(githubId)
                     .build());
 
             connection.setUsername(gitHubUser.login());
@@ -133,17 +165,19 @@ public class GitHubAuthService {
             session.setAttribute(CONNECTED_USER_KEY, gitHubUser.login());
 
             // Link to logged-in Gitracker user if present in session
-            Long gitrackerUserId = (Long) session.getAttribute(AuthService.SESSION_USER_ID_KEY);
             if (gitrackerUserId != null) {
-                userRepository.findById(gitrackerUserId).ifPresent(user -> {
+                UserEntity user = userRepository.findById(gitrackerUserId).orElse(null);
+                if (user != null) {
                     user.setGithubConnection(savedConnection);
                     user.setGithubUsername(gitHubUser.login());
                     userRepository.save(user);
-                });
+                }
             }
 
             return frontendUrl + "/settings?connected=true";
 
+        } catch (DataIntegrityViolationException e) {
+            return frontendUrl + "/settings?error=account_already_linked";
         } catch (Exception e) {
             return frontendUrl + "/settings?error=auth_failed";
         }
@@ -173,6 +207,7 @@ public class GitHubAuthService {
                             user.getUpdatedAt() != null ? user.getUpdatedAt().toString() : null
                     );
                 }
+                return new GitHubConnectionStatusResponse(false, null, null, null, null);
             }
         }
 
@@ -182,7 +217,7 @@ public class GitHubAuthService {
         }
 
         Optional<GitHubAppConnection> connectionOpt = connectionRepository.findByUsername(username);
-        if (connectionOpt.isEmpty()) {
+        if (connectionOpt.isEmpty() || userRepository.findByGithubConnection(connectionOpt.get()).isPresent()) {
             session.removeAttribute(CONNECTED_USER_KEY);
             return new GitHubConnectionStatusResponse(false, null, null, null, null);
         }
@@ -197,6 +232,7 @@ public class GitHubAuthService {
         );
     }
 
+    @Transactional
     public void disconnect(HttpSession session) {
         Long gitrackerUserId = (Long) session.getAttribute(AuthService.SESSION_USER_ID_KEY);
         if (gitrackerUserId != null) {
@@ -213,21 +249,44 @@ public class GitHubAuthService {
 
         String username = (String) session.getAttribute(CONNECTED_USER_KEY);
         if (username != null) {
-            connectionRepository.findByUsername(username)
-                    .ifPresent(connectionRepository::delete);
             session.removeAttribute(CONNECTED_USER_KEY);
+            if (gitrackerUserId == null) {
+                connectionRepository.findByUsername(username).ifPresent(conn -> {
+                    if (userRepository.findByGithubConnection(conn).isEmpty()) {
+                        connectionRepository.delete(conn);
+                    }
+                });
+            }
         }
     }
 
     public List<RepositoryResponse> getAuthenticatedRepositories(HttpSession session) {
-        String username = (String) session.getAttribute(CONNECTED_USER_KEY);
+        Long gitrackerUserId = (Long) session.getAttribute(AuthService.SESSION_USER_ID_KEY);
+        GitHubAppConnection connection = null;
 
-        if (username == null) {
-            throw new IllegalStateException("No authenticated GitHub session found.");
+        if (gitrackerUserId != null) {
+            UserEntity user = userRepository.findById(gitrackerUserId).orElse(null);
+            if (user != null && user.getGithubConnection() != null) {
+                connection = user.getGithubConnection();
+            }
         }
 
-        GitHubAppConnection connection = connectionRepository.findByUsername(username)
-                .orElseThrow(() -> new IllegalStateException("GitHub connection details not found."));
+        if (connection == null) {
+            String username = (String) session.getAttribute(CONNECTED_USER_KEY);
+            if (username != null) {
+                Optional<GitHubAppConnection> candidateOpt = connectionRepository.findByUsername(username);
+                if (candidateOpt.isPresent()) {
+                    GitHubAppConnection candidate = candidateOpt.get();
+                    if (userRepository.findByGithubConnection(candidate).isEmpty()) {
+                        connection = candidate;
+                    }
+                }
+            }
+        }
+
+        if (connection == null || connection.getAccessToken() == null || connection.getAccessToken().isBlank()) {
+            throw new IllegalStateException("No authenticated GitHub session found.");
+        }
 
         GitHubRepositoryDto[] repos = gitHubApiClient.getAuthenticatedUserRepositories(connection.getAccessToken());
 
